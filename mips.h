@@ -41,6 +41,37 @@
 
 
 
+#define ADD 0x00 
+#define ADDI 0x01 
+#define SUB 0x02
+#define SUBI 0x03
+#define MUL 0x04
+#define MULI 0x05
+#define OR 0x06
+#define ORI 0x07
+#define AND 0x08
+#define ANDI 0x09
+#define XOR 0x0A
+#define XORI 0x0B
+#define LDW 0x0C
+#define STW 0x0D
+#define BZ 0x0E
+#define BEQ 0x0F
+#define JR 0x10
+#define HALT 0x11
+
+
+
+
+
+
+
+
+
+
+
+
+
 /**
   * hex_to_binary_string() - 		
   *									 
@@ -56,7 +87,7 @@ void hex_to_binary_string(const char *hex_string, char *binary_string);
 
 
 
-
+void opcode_master(const char *binary_string);
 
 
 
