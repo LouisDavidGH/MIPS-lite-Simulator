@@ -7,14 +7,9 @@
  *				Anthony Le (anthle@pdx.edu)
  *
  *
- * @date:       April 17, 2025
- * @version:    0.1
- *
- *
- * MODES:		
- *				NORMAL:		
- *
- *				DEBUG:		
+ * @date:       May 9, 2025
+ * @version:    1.0
+ *		
  *
  */
 
@@ -24,9 +19,10 @@
 #define _MIPS_H
 
 
-// MIPS instruction specifications
+// MIPS system specifications
 #define ADDRESS_BITS 32
 #define NUM_REGISTERS 32
+#define MEMORY_SIZE 1024
 
 
 // Mode values
@@ -90,10 +86,34 @@ void hex_to_binary_string(const char *hex_string, char *binary_string);
 void opcode_master(const char *binary_string);
 
 
+void print_stats();
 
 
+void end_program();
 
+void addfunc(int dest, int src1, int src2, bool is_immediate);
 
+void subfunc(int dest, int src1, int src2, bool is_immediate);
+
+void mulfunc(int dest, int src1, int src2, bool is_immediate);
+
+void orfunc(int dest, int src1, int src2, bool is_immediate);
+
+void andfunc(int dest, int src1, int src2, bool is_immediate);
+
+void xorfunc(int dest, int src1, int src2, bool is_immediate);
+
+void ldwfunc(int rt, int rs, int imm);
+
+void stwfunc(int rt, int rs, int imm);
+
+void bzfunc(int rs, int imm);
+
+void beqfunc(int rt, int rs, int imm);
+
+void jrfunc(int rs);
+
+void haltfunc();
 
 
 

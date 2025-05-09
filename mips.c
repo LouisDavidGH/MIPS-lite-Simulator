@@ -7,16 +7,17 @@
  *				Anthony Le (anthle@pdx.edu)
  *
  *
- * @date:       April 17, 2025
- * @version:    0.1
+ * @date:       May 9, 2025
+ * @version:    1.0
  *
  *
  * MODES:		
- *				NORMAL:		Print current cache state on 9's,
- *							and usage statistics at the end.
+ *				NORMAL:		Print instruction statistics at the end of the program.
+ *							
  *
- *				VERBOSE:	Print everything from NORMAL mode,
- *							plus details on L2-involved operations.
+ *				DEBUG:		Normal mode + extra prints for decoded addresses
+ *							and instructions executed.
+ *							
  *
  */
 
@@ -29,12 +30,32 @@
 #include <stdbool.h>
 #include "mips.h"
 
+int32_t registers[NUM_REGISTERS] = {0};
+int32_t memory[MEMORY_SIZE];
+
+int rtype_count = 0;
+int itype_count = 0;
+int arith_count = 0;
+int logic_count = 0;
+int memacc_count = 0;
+int cflow_count = 0;
+int total_inst_count = 0;
+
 
 int mode;
 
 
+FILE *file;
+
+
+int pc = 0;
+
+bool rtype = 0;
+bool was_control_flow = 0;
+
+
+
 int main(int argc, char *argv[]) {
-	FILE *file;
 	char line[LINE_BUFFER_SIZE];
     char binary_string[ADDRESS_BITS + 1];
 	int line_number = 0;
@@ -58,7 +79,8 @@ int main(int argc, char *argv[]) {
 	// Open the trace file specified in the second argument
     file = fopen(argv[2], "r");
     if (file == NULL) {
-        perror("Error opening trace file");
+        if (mode == DEBUG)
+			perror("Error opening trace file");
         return EXIT_FAILURE;
     }
 	
@@ -86,7 +108,13 @@ int main(int argc, char *argv[]) {
 
         // Convert to binary string and begin binary manip
 		hex_to_binary_string(line, binary_string);
+		
+		if (mode == DEBUG)
+			printf("Executing at PC: %d\n", pc);
+		
         opcode_master(binary_string);
+
+
 
         // DEBUG: print each binary string
         /*if (mode == DEBUG) {
@@ -99,14 +127,23 @@ int main(int argc, char *argv[]) {
         // CONTINUE
     }
 	
-
-    // Close the file
-    fclose(file);
 	
-	return 0;
+	if(mode == DEBUG)
+		printf("No HALT instruction found- ending program");
+	
+	
+	end_program();
+
+
+	return 99;
 }
 
-
+void end_program(){
+	// Close the file
+    fclose(file);
+	print_stats();
+	exit(EXIT_SUCCESS);
+}
 
 void hex_to_binary_string(const char *hex_string, char *binary_string) {
     unsigned int value;
@@ -118,7 +155,24 @@ void hex_to_binary_string(const char *hex_string, char *binary_string) {
     binary_string[ADDRESS_BITS] = '\0'; // null-terminate
 }
 
+void init_memory() {
+    for (int i = 0; i < MEMORY_SIZE; i++) {
+        memory[i] = 0;
+    }
+}
 
+void print_stats(){
+    printf("\nInstruction Count Statistics:\n"); 
+    printf("  Total Instructions:	%d\n", total_inst_count);
+    printf("  R-Type:		%d\n", rtype_count);
+    printf("  I-Type:		%d\n", itype_count);
+    printf("  Arithmetic:		%d\n", arith_count);
+    printf("  Logical:		%d\n", logic_count);
+    printf("  Memory Access:	%d\n", memacc_count);
+    printf("  Control Flow:		%d\n", cflow_count);
+	
+	return;
+}
 
 
 void opcode_master(const char *binary_string) {
@@ -127,128 +181,358 @@ void opcode_master(const char *binary_string) {
 	unsigned int rt 		= 0;
 	unsigned int rd 		= 0;
 	unsigned int immediate 	= 0;
+	rtype = 0;
+	was_control_flow = 0;
 
-    // Build opcode by shifting in the first 6 bits of the string
-    for (int i = 0; i < 6; i++) {
-        opcode = (opcode << 1) | (binary_string[i] - '0');
-    }
 
-	// rs = bits 6..10
-	for (int i = 6; i < 11; i++) {
-		rs = (rs << 1) | (binary_string[i] - '0');
+
+
+	// Decoding the address:
+	{
+		// Build opcode by shifting in the first 6 bits of the string
+		for (int i = 0; i < 6; i++) {
+			opcode = (opcode << 1) | (binary_string[i] - '0');
+		}
+
+		// rs = bits 6..10
+		for (int i = 6; i < 11; i++) {
+			rs = (rs << 1) | (binary_string[i] - '0');
+		}
+
+		// rt = bits 11..15
+		for (int i = 11; i < 16; i++) {
+			rt = (rt << 1) | (binary_string[i] - '0');
+		}
+
+		// rd = bits 16..20
+		for (int i = 16; i < 21; i++) {
+			rd = (rd << 1) | (binary_string[i] - '0');
+		}
+
+		// immediate = bits 16..31
+		for (int i = 16; i < 32; i++) {
+			immediate = (immediate << 1) | (binary_string[i] - '0');
+		}
 	}
+	
+	if (mode == DEBUG){
+		// Print opcode in binary
+		printf("\nOpcode: ");
+		for (int b = 5; b >= 0; b--) {
+			putchar(((opcode >> b) & 1) ? '1' : '0');
+		}
 
-	// rt = bits 11..15
-	for (int i = 11; i < 16; i++) {
-		rt = (rt << 1) | (binary_string[i] - '0');
+		// Print the opcode and its value in hex and decimal
+		printf("  (0x%X / %u)\n", opcode, opcode);
+		
+		printf("Instruction: ");
+		
 	}
-
-	// rd = bits 16..20
-	for (int i = 16; i < 21; i++) {
-		rd = (rd << 1) | (binary_string[i] - '0');
-	}
-
-	// immediate = bits 16..31
-	for (int i = 16; i < 32; i++) {
-		immediate = (immediate << 1) | (binary_string[i] - '0');
-	}
-
-
-    switch(opcode) {
+	
+	
+    switch(opcode) {	
+		// Arithmetic Instructions:
+		{
 		case ADD:
-			printf("ADD\n");
+			if (mode == DEBUG) printf("ADD\n");
+			addfunc(rd, rs, rt, false);
 			break;
 			
 		case ADDI:
-			printf("ADDI\n");
+			if (mode == DEBUG) printf("ADDI\n");
+			addfunc(rt, rs, immediate, true);
 			break;
 			
 		case SUB:
-			printf("SUB\n");
+			if (mode == DEBUG) printf("SUB\n");
+			subfunc(rd, rs, rt, false);
 			break;
 			
 		case SUBI:
-			printf("SUBI\n");
+			if (mode == DEBUG) printf("SUBI\n");
+			subfunc(rt, rs, immediate, true);
 			break;
 			
 		case MUL:
-			printf("MUL\n");
+			if (mode == DEBUG) printf("MUL\n");
+			mulfunc(rd, rs, rt, false);
+			
 			break;
 			
 		case MULI:
-			printf("MULI\n");
+			if (mode == DEBUG) printf("MULI\n");
+			mulfunc(rt, rs, immediate, true);
 			break;
-			
+		}
+		
+		
+		// Logical Instructions:
+		{
 		case OR:
-			printf("OR\n");
+			if (mode == DEBUG) printf("OR\n");
+			orfunc(rd, rs, rt, false);
 			break;
 			
 		case ORI:
-			printf("ORI\n");
+			if (mode == DEBUG) printf("ORI\n");
+			orfunc(rt, rs, immediate, true);
 			break;
 			
 		case AND:
-			printf("AND\n");
+			if (mode == DEBUG) printf("AND\n");
+			andfunc(rd, rs, rt, false);
 			break;
 			
 		case ANDI:
-			printf("ANDI\n");
+			if (mode == DEBUG) printf("ANDI\n");
+			andfunc(rt, rs, immediate, true);
 			break;
 			
 		case XOR:
-			printf("XOR\n");
+			if (mode == DEBUG) printf("XOR\n");
+			xorfunc(rd, rs, rt, false);
 			break;
 			
 		case XORI:
-			printf("XORI\n");
-			break;
-			
+			if (mode == DEBUG) printf("XORI\n");
+			xorfunc(rt, rs, immediate, true);
+			break;	
+		}
+		
+		
+		// Memory Access Instructions:
+		{
 		case LDW:
-			printf("LDW\n");
+			if (mode == DEBUG) printf("LDW\n");
+			ldwfunc(rt, rs, immediate);
 			break;
 			
 		case STW:
-			printf("STW\n");
+			if (mode == DEBUG) printf("STW\n");
+			stwfunc(rt, rs, immediate);
 			break;
-			
+		}
+		
+		
+		// Control Flow Instructions:
+		{
 		case BZ:
-			printf("BZ\n");
+			if (mode == DEBUG) printf("BZ\n");
+			bzfunc(rs, immediate);
 			break;
 			
 		case BEQ:
-			printf("BEQ\n");
+			if (mode == DEBUG) printf("BEQ\n");
+			beqfunc(rs, rt, immediate);
 			break;
 			
 		case JR:
-			printf("JR\n");
+			if (mode == DEBUG) printf("JR\n");
+			jrfunc(rs);
 			break;
 			
 		case HALT:
-			printf("HALT: END PROGRAM\n"); // see below DEBUG block
+			if (mode == DEBUG) printf("HALT: ENDING PROGRAM\n\n\n\n\n");
+			haltfunc();
 			break;
-			
+		}
+		
+	
 		default:
-			printf("Error: Unknown opcode 0x%02X. Exiting.\n", opcode);
+			if (mode == DEBUG) printf("Error: Unknown opcode 0x%02X. Exiting.\n", opcode);
 			exit(EXIT_FAILURE);
 	}
 	
 	
+	// Displays decoded sections of the address
 	if (mode == DEBUG) {
-        
-        printf("\nOpcode: ");
-        for (int b = 5; b >= 0; b--) {
-            putchar(((opcode >> b) & 1) ? '1' : '0');
-        }
-        
-        printf("  (0x%X / %u)\n\n", opcode, opcode);
+
+		// Differentiate between R-Type and I-Type
+		if (rtype == 1)
+			printf("R-Type:    rs: %2u   rt: %2u   rd: %2u\n", rs, rt, rd);
 		
-		printf("  rs: %2u   rt: %2u   rd: %2u\n  immediate: %2u\n\n", rs, rt, rd, immediate);
-    }
+		else
+			printf("I-Type:    rs: %2u   rt: %2u   imm: %6d\n", rs, rt, (int16_t)immediate);
+		
+		printf("PC: %d\n", pc);
+
+		printf("\n\n\n\n");
+	}
 	
-	printf("\n\n\n\n");
 	
-	if (opcode == HALT)
-		exit(EXIT_SUCCESS);
+	// Unless control flow instruction modified pc directly, increment by default
+	if (was_control_flow == 0)
+		pc++;
+	
 }
 
 
+void addfunc(int dest, int src1, int src2, bool is_immediate) {
+	if (!is_immediate) rtype = 1;
+    int32_t val1 = registers[src1];
+    int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2]; // sign-extend imm
+    registers[dest] = val1 + val2;
+
+    arith_count++;
+    if (is_immediate)
+        itype_count++;
+    else
+        rtype_count++;
+
+    total_inst_count++;
+}
+
+
+void subfunc(int dest, int src1, int src2, bool is_immediate) {
+	if (!is_immediate) rtype = 1;
+    int32_t val1 = registers[src1];
+    int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
+    registers[dest] = val1 - val2;
+
+    arith_count++;
+    if (is_immediate)
+        itype_count++;
+    else
+        rtype_count++;
+
+    total_inst_count++;
+}
+
+
+void mulfunc(int dest, int src1, int src2, bool is_immediate){
+	if (!is_immediate) rtype = 1;
+	int32_t val1 = registers[src1];
+    int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
+    registers[dest] = val1 * val2;
+
+    arith_count++;
+    if (is_immediate)
+        itype_count++;
+    else
+        rtype_count++;
+
+    total_inst_count++;
+}
+
+
+void orfunc(int dest, int src1, int src2, bool is_immediate) {
+	if (!is_immediate) rtype = 1;
+    int32_t val1 = registers[src1];
+    int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
+    registers[dest] = val1 | val2;
+
+    logic_count++;
+    if (is_immediate)
+        itype_count++;
+    else
+        rtype_count++;
+
+    total_inst_count++;
+}
+
+
+void andfunc(int dest, int src1, int src2, bool is_immediate) {
+	if (!is_immediate) rtype = 1;
+    int32_t val1 = registers[src1];
+    int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
+    registers[dest] = val1 & val2;
+
+    logic_count++;
+    if (is_immediate)
+        itype_count++;
+    else
+        rtype_count++;
+
+    total_inst_count++;
+}
+
+
+void xorfunc(int dest, int src1, int src2, bool is_immediate) {
+	if (!is_immediate) rtype = 1;
+    int32_t val1 = registers[src1];
+    int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
+    registers[dest] = val1 ^ val2;
+
+    logic_count++;
+    if (is_immediate)
+        itype_count++;
+    else
+        rtype_count++;
+
+    total_inst_count++;
+}
+
+
+void ldwfunc(int rt, int rs, int imm) {
+    int32_t addr = registers[rs] + (int16_t)imm;
+
+    if (addr % 4 != 0 || addr / 4 < 0 || addr / 4 >= MEMORY_SIZE) {
+        printf("Memory load error: invalid address 0x%X\n", addr);
+        exit(EXIT_FAILURE);
+    }
+
+    registers[rt] = memory[addr / 4];
+
+    memacc_count++;
+    itype_count++;
+    total_inst_count++;
+}
+
+
+void stwfunc(int rt, int rs, int imm) {
+    int32_t addr = registers[rs] + (int16_t)imm;
+
+    if (addr % 4 != 0 || addr / 4 < 0 || addr / 4 >= MEMORY_SIZE) {
+        printf("Memory store error: invalid address 0x%X\n", addr);
+        exit(EXIT_FAILURE);
+    }
+
+    memory[addr / 4] = registers[rt];
+
+    memacc_count++;
+    itype_count++;
+    total_inst_count++;
+}
+
+
+void bzfunc(int rs, int imm) {
+    cflow_count++;
+    itype_count++;
+    total_inst_count++;
+
+    if (registers[rs] == 0) {
+        pc += (int16_t)imm;
+        was_control_flow = 1;
+    }
+}
+
+void beqfunc(int rs, int rt, int imm) {
+    cflow_count++;
+    itype_count++;
+    total_inst_count++;
+
+    if (registers[rs] == registers[rt]) {
+        pc += (int16_t)imm;
+        was_control_flow = 1;
+    }
+}
+
+
+void jrfunc(int rs) {
+    cflow_count++;
+    itype_count++;
+    total_inst_count++;
+	was_control_flow = 1;
+
+    pc = registers[rs];  // Assume PC holds instruction index, not byte address
+}
+
+
+void haltfunc(){
+	cflow_count++;
+	itype_count++;
+	total_inst_count++;
+	was_control_flow = 1;
+	
+	end_program();
+}
