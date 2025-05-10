@@ -30,9 +30,11 @@
 #include <stdbool.h>
 #include "mips.h"
 
+// Initialize memory array - Initialize Register array
 int32_t registers[NUM_REGISTERS] = {0};
 int32_t memory[MEMORY_SIZE];
 
+// Global variable to count transactions
 int rtype_count = 0;
 int itype_count = 0;
 int arith_count = 0;
@@ -41,13 +43,13 @@ int memacc_count = 0;
 int cflow_count = 0;
 int total_inst_count = 0;
 
-
+// Program run more
 int mode;
 
-
+// File pointer
 FILE *file;
 
-
+// Program Counter
 int pc = 0;
 
 bool rtype = 0;
@@ -155,6 +157,8 @@ void hex_to_binary_string(const char *hex_string, char *binary_string) {
     binary_string[ADDRESS_BITS] = '\0'; // null-terminate
 }
 
+
+//Do we needs this???
 void init_memory() {
     for (int i = 0; i < MEMORY_SIZE; i++) {
         memory[i] = 0;
@@ -176,6 +180,8 @@ void print_stats(){
 
 
 void opcode_master(const char *binary_string) {
+
+	//
     unsigned int opcode 	= 0;
 	unsigned int rs 		= 0;
 	unsigned int rt 		= 0;
