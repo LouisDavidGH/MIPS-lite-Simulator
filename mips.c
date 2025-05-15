@@ -172,9 +172,14 @@ int main(int argc, char *argv[]) {
 
         // DEBUG: print each binary string
         if (mode == DEBUG) {
-            printf("Line %d\n", line_number);
+            printf("---Line %d---\n", line_number);
            //  printf("Binary: %u\n", program_store[line_number - 1]);
-            printf("Hex Number: %X\n\n", rawHex);
+            printf("Hex Number: %X\n", rawHex);
+			printf("Instruction: 0x%X, %d\n", program_store[line_number - 1].instruction, program_store[line_number - 1].instruction);
+			printf("Destination register: %d\n", program_store[line_number - 1].dest_register);
+			printf("1st source register: %d\n", program_store[line_number - 1].first_reg_val);
+			if (instruction_param <= 0xB && instruction_param % 2 == 0) printf ("2nd source register: %d\n\n", program_store[line_number - 1].second_reg_val);
+			else printf("Immediate value: %d\n\n", program_store[line_number - 1].immediate);
         }
 		
 
