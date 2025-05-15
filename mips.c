@@ -30,9 +30,28 @@
 #include <stdbool.h>
 #include "mips.h"
 
+// struct to hold decoded line information
+typedef struct decoded_line_information {
+	int instruction;
+	int32_t dest_register;
+	int32_t first_reg_val;
+	int32_t second_reg_val;
+	int32_t immediate;
+	int pipe_stage;
+} decodedLine;
+
+// struct to hold pipline informatoin
+typedef struct pipeline_status_and_instruction {
+	int line_in_pipe;
+	int stage;
+} pipeline;
+
 // Initialize memory array - Initialize Register array
 int32_t registers[NUM_REGISTERS] = {0};
 int32_t memory[MEMORY_SIZE];
+
+// Stores all of the line's information in one array
+decodedLine program_store[MEMORY_SIZE];
 
 // Global variable to count transactions
 int rtype_count = 0;
@@ -108,27 +127,76 @@ int main(int argc, char *argv[]) {
             return EXIT_FAILURE; // End the program if incorrect length
         }
 
-        // Convert to binary string and begin binary manip
+        // Convert to binary string and begin binary manip -- CHARACTER 01 VERSION
 		hex_to_binary_string(line, binary_string);
-		
-		if (mode == DEBUG)
-			printf("Executing at PC: %d\n", pc);
-		
-        opcode_master(binary_string);
+	
+		// this is converting the intake to an integer
+		uint32_t rawHex = StringToHex(line);
+
+		// bit shift the intruction param by twenty six
+		int32_t instruction_param = rawHex>>26;
+
+		program_store[line_number - 1].instruction = instruction_param;
 
 
+		// If - instruction is register based : Else - instruction is immediate based
+		//		This block populates the instruction struct with appropriate register values and immediates based on instruction type
+		if (instruction_param <= 0xB && instruction_param % 2 == 0){
+			int32_t dest_reg = (rawHex << 6) >> 27;
+			int32_t first_reg = (rawHex << 11) >> 27;
+			int32_t second_reg = (rawHex << 16) >> 27;
+			program_store[line_number - 1].dest_register = dest_reg;
+			program_store[line_number - 1].first_reg_val = first_reg;
+			program_store[line_number - 1].second_reg_val = second_reg;
+		}
+		// Note - Even if some instructions don't use all the register/immediate values, they are still populated here
+		else if ( instruction_param <= 0x11){
+			int32_t dest_reg = (rawHex << 6) >> 27;
+			int32_t first_reg = (rawHex << 11) >> 27;
+			int32_t immediate_val = (rawHex << 16) >> 16;
+			program_store[line_number - 1].dest_register = dest_reg;
+			program_store[line_number - 1].first_reg_val = first_reg;
+			program_store[line_number - 1].immediate = immediate_val;
+			
+		}
+		
+		else {
+			if (mode == DEBUG) {
+            printf("Line %d\n", line_number);
+           //  printf("Binary: %u\n", program_store[line_number - 1]);
+            printf("%d does not map to a valid instruction\n\n", program_store[line_number - 1].instruction);
+        }
+			continue;
+		}
+		
 
         // DEBUG: print each binary string
-        /*if (mode == DEBUG) {
+        if (mode == DEBUG) {
             printf("Line %d\n", line_number);
-            printf("Hex: %s\n", line);
-            printf("Binary: %s\n\n", binary_string);
-        }*/
+           //  printf("Binary: %u\n", program_store[line_number - 1]);
+            printf("Hex Number: %X\n\n", rawHex);
+        }
 		
 
         // CONTINUE
     }
 	
+
+	/*
+
+	AGREED_METHOD
+		PRE-DECODE
+			Store info using line structs
+
+		Have a master clock
+			Cycles push thing through the pipiline and advance the program
+
+		Pipes
+			Pipes are struct that keep what instruction/line they're on and the stage
+		
+
+	*/
+
 	
 	if(mode == DEBUG)
 		printf("No HALT instruction found- ending program");
@@ -138,6 +206,19 @@ int main(int argc, char *argv[]) {
 
 
 	return 99;
+}
+
+int32_t StringToHex(char *hex_string){
+    uint32_t temp;
+    int32_t signedInt;
+
+    // Convert the hex string to a 32-bit unsigned integer
+    temp = (uint32_t)strtoul(hex_string, NULL, 16);
+
+    // Cast the unsigned value to signed (handles two's complement conversion)
+    signedInt = (int32_t)temp;
+
+	return signedInt;
 }
 
 void end_program(){
@@ -158,12 +239,6 @@ void hex_to_binary_string(const char *hex_string, char *binary_string) {
 }
 
 
-//Do we needs this???
-void init_memory() {
-    for (int i = 0; i < MEMORY_SIZE; i++) {
-        memory[i] = 0;
-    }
-}
 
 void print_stats(){
     printf("\nInstruction Count Statistics:\n"); 
