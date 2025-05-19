@@ -127,9 +127,6 @@ int main(int argc, char *argv[]) {
             return EXIT_FAILURE; // End the program if incorrect length
         }
 
-        // Convert to binary string and begin binary manip -- CHARACTER 01 VERSION
-		hex_to_binary_string(line, binary_string);
-	
 		// this is converting the intake to an integer
 		uint32_t rawHex = StringToHex(line);
 
@@ -159,7 +156,7 @@ int main(int argc, char *argv[]) {
 			program_store[line_number - 1].immediate = immediate_val;
 			
 		}
-		
+		// Am I missing some logic for getting other instructions?
 		else {
 			if (mode == DEBUG) {
             printf("Line %d\n", line_number);
@@ -169,6 +166,7 @@ int main(int argc, char *argv[]) {
 			continue;
 		}
 		
+		opcode_master(program_store[line_number - 1]);
 
         // DEBUG: print each binary string
         if (mode == DEBUG) {
@@ -233,18 +231,6 @@ void end_program(){
 	exit(EXIT_SUCCESS);
 }
 
-void hex_to_binary_string(const char *hex_string, char *binary_string) {
-    unsigned int value;
-    sscanf(hex_string, "%x", &value);
-
-    for (int i = ADDRESS_BITS - 1; i >= 0; i--) {
-        binary_string[ADDRESS_BITS - 1 - i] = (value & (1U << i)) ? '1' : '0';
-    }
-    binary_string[ADDRESS_BITS] = '\0'; // null-terminate
-}
-
-
-
 void print_stats(){
     printf("\nInstruction Count Statistics:\n"); 
     printf("  Total Instructions:	%d\n", total_inst_count);
@@ -259,62 +245,17 @@ void print_stats(){
 }
 
 
-void opcode_master(const char *binary_string) {
+void opcode_master(decodedLine line) {
 
 	//
-    unsigned int opcode 	= 0;
-	unsigned int rs 		= 0;
-	unsigned int rt 		= 0;
-	unsigned int rd 		= 0;
-	unsigned int immediate 	= 0;
+    unsigned int opcode 	= line.instruction;
+	unsigned int rd 		= line.dest_register;
+	unsigned int rs 		= line.first_reg_val;
+	unsigned int rt 		= line.second_reg_val;
+	unsigned int immediate 	= line.immediate;
 	rtype = 0;
 	was_control_flow = 0;
 
-
-
-
-	// Decoding the address:
-	{
-		// Build opcode by shifting in the first 6 bits of the string
-		for (int i = 0; i < 6; i++) {
-			opcode = (opcode << 1) | (binary_string[i] - '0');
-		}
-
-		// rs = bits 6..10
-		for (int i = 6; i < 11; i++) {
-			rs = (rs << 1) | (binary_string[i] - '0');
-		}
-
-		// rt = bits 11..15
-		for (int i = 11; i < 16; i++) {
-			rt = (rt << 1) | (binary_string[i] - '0');
-		}
-
-		// rd = bits 16..20
-		for (int i = 16; i < 21; i++) {
-			rd = (rd << 1) | (binary_string[i] - '0');
-		}
-
-		// immediate = bits 16..31
-		for (int i = 16; i < 32; i++) {
-			immediate = (immediate << 1) | (binary_string[i] - '0');
-		}
-	}
-	
-	if (mode == DEBUG){
-		// Print opcode in binary
-		printf("\nOpcode: ");
-		for (int b = 5; b >= 0; b--) {
-			putchar(((opcode >> b) & 1) ? '1' : '0');
-		}
-
-		// Print the opcode and its value in hex and decimal
-		printf("  (0x%X / %u)\n", opcode, opcode);
-		
-		printf("Instruction: ");
-		
-	}
-	
 	
     switch(opcode) {	
 		// Arithmetic Instructions:

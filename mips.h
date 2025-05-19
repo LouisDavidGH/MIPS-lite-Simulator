@@ -58,32 +58,11 @@
 
 
 
+typedef struct decoded_line_information decodedLine;
 
+typedef struct pipeline_status_and_instruction pipeline;
 
-
-
-
-
-
-
-
-
-/**
-  * hex_to_binary_string() - 		
-  *									 
-  *									
-  *									
-  *
-  * @param	*hex_string			
-  * @param	*binary_string		
-  *
-  */
-void hex_to_binary_string(const char *hex_string, char *binary_string);
-
-
-
-
-void opcode_master(const char *binary_string);
+void opcode_master(decodedLine line);
 
 
 void print_stats();
