@@ -75,7 +75,7 @@ int global_clk[CLOCK_SIZE];
 
 bool rtype = 0;
 bool was_control_flow = 0;
-
+void print_line(decodedLine line, int index);
 //////////////////////////
 // MAIN
 //////////////////////////
@@ -169,6 +169,7 @@ int main(int argc, char *argv[]) {
         }
 			continue;
 		}
+		print_line(program_store[line_number - 1], line_number - 1);
 
 		// opcode_master(program_store[line_number - 1]);
 		
@@ -195,7 +196,7 @@ int main(int argc, char *argv[]) {
 		}
 		// Using the program counter to go through the list.
 		opcode_master(program_store[pc]);
-		
+		// print_line(program_store[pc], pc);
 		// bit shift the intruction param by twenty six
 		int32_t instruction_param = program_store[pc].rawHexVal>>26;
 
@@ -272,6 +273,23 @@ void print_stats(){
     printf("  Logical:		%d\n", logic_count);
     printf("  Memory Access:	%d\n", memacc_count);
     printf("  Control Flow:		%d\n", cflow_count);
+	
+	return;
+}
+
+void print_line(decodedLine line, int index){
+	unsigned int opcode 	= line.instruction;
+	unsigned int rd 		= line.dest_register;
+	unsigned int rs 		= line.first_reg_val;
+	unsigned int rt 		= line.second_reg_val;
+	unsigned int immediate 	= line.immediate;
+    printf("\nLine Number: [%d]\n",index); 
+    printf("  Opcode:		%d\n", line.instruction);
+    printf("  rd:			%d\n", line.dest_register);
+    printf("  rs:			%d\n", line.first_reg_val);
+    printf("  rt:			%d\n", line.second_reg_val);
+    printf("  immediate:		%d\n", line.immediate);
+	
 	
 	return;
 }
