@@ -38,6 +38,7 @@ typedef struct decoded_line_information {
 	int32_t second_reg_val;
 	int32_t immediate;
 	int pipe_stage;
+	uint32_t rawHexVal;
 } decodedLine;
 
 // struct to hold pipline informatoin
@@ -61,7 +62,7 @@ int logic_count = 0;
 int memacc_count = 0;
 int cflow_count = 0;
 int total_inst_count = 0;
-
+int maxline = 0;
 // Program run more
 int mode;
 
@@ -70,12 +71,14 @@ FILE *file;
 
 // Program Counter
 int pc = 0;
+int global_clk[CLOCK_SIZE];
 
 bool rtype = 0;
 bool was_control_flow = 0;
 
-
-
+//////////////////////////
+// MAIN
+//////////////////////////
 int main(int argc, char *argv[]) {
 	char line[LINE_BUFFER_SIZE];
     char binary_string[ADDRESS_BITS + 1];
@@ -132,7 +135,7 @@ int main(int argc, char *argv[]) {
 
 		// bit shift the intruction param by twenty six
 		int32_t instruction_param = rawHex>>26;
-
+		maxline = line_number - 1;
 		program_store[line_number - 1].instruction = instruction_param;
 
 
@@ -145,6 +148,7 @@ int main(int argc, char *argv[]) {
 			program_store[line_number - 1].dest_register = dest_reg;
 			program_store[line_number - 1].first_reg_val = first_reg;
 			program_store[line_number - 1].second_reg_val = second_reg;
+			program_store[line_number - 1].rawHexVal = rawHex;
 		}
 		// Note - Even if some instructions don't use all the register/immediate values, they are still populated here
 		else if ( instruction_param <= 0x11){
@@ -154,7 +158,7 @@ int main(int argc, char *argv[]) {
 			program_store[line_number - 1].dest_register = dest_reg;
 			program_store[line_number - 1].first_reg_val = first_reg;
 			program_store[line_number - 1].immediate = immediate_val;
-			
+			program_store[line_number - 1].rawHexVal = rawHex;
 		}
 		// Am I missing some logic for getting other instructions?
 		else {
@@ -165,25 +169,49 @@ int main(int argc, char *argv[]) {
         }
 			continue;
 		}
-		
-		opcode_master(program_store[line_number - 1]);
 
+		// opcode_master(program_store[line_number - 1]);
+		
         // DEBUG: print each binary string
-        if (mode == DEBUG) {
-            printf("---Line %d---\n", line_number);
-           //  printf("Binary: %u\n", program_store[line_number - 1]);
-            printf("Hex Number: %X\n", rawHex);
-			printf("Instruction: 0x%X, %d\n", program_store[line_number - 1].instruction, program_store[line_number - 1].instruction);
-			printf("Destination register: %d\n", program_store[line_number - 1].dest_register);
-			printf("1st source register: %d\n", program_store[line_number - 1].first_reg_val);
-			if (instruction_param <= 0xB && instruction_param % 2 == 0) printf ("2nd source register: %d\n\n", program_store[line_number - 1].second_reg_val);
-			else printf("Immediate value: %d\n\n", program_store[line_number - 1].immediate);
-        }
+        // if (mode == DEBUG) {
+        //     printf("---Line %d---\n", line_number);
+        //    //  printf("Binary: %u\n", program_store[line_number - 1]);
+        //     printf("Hex Number: %X\n", rawHex);
+		// 	printf("Instruction: 0x%X, %d\n", program_store[line_number - 1].instruction, program_store[line_number - 1].instruction);
+		// 	printf("Destination register: %d\n", program_store[line_number - 1].dest_register);
+		// 	printf("1st source register: %d\n", program_store[line_number - 1].first_reg_val);
+		// 	if (instruction_param <= 0xB && instruction_param % 2 == 0) printf ("2nd source register: %d\n\n", program_store[line_number - 1].second_reg_val);
+		// 	else printf("Immediate value: %d\n\n", program_store[line_number - 1].immediate);
+        // }
 		
 
         // CONTINUE
     }
-	
+	int Running = 1;
+	// THIS SECTION IS THE PROGRAM COUNTER KEEPING TRACK OF EACH INSTRUCTION UNTIL HALTED
+	while(Running) {
+		if (pc == maxline || program_store[pc].instruction == HALT) {
+			break;
+		}
+		// Using the program counter to go through the list.
+		opcode_master(program_store[pc]);
+		
+		// bit shift the intruction param by twenty six
+		int32_t instruction_param = program_store[pc].rawHexVal>>26;
+
+        // DEBUG: print each binary string
+        if (mode == DEBUG) {
+            printf("---Line %d---\n", pc);
+           //  printf("Binary: %u\n", program_store[line_number - 1]);
+            printf("Hex Number: %X\n", program_store[pc].rawHexVal);
+			printf("Instruction: 0x%X, %d\n", program_store[pc].instruction, program_store[pc].instruction);
+			printf("Destination register: %d\n", program_store[pc].dest_register);
+			printf("1st source register: %d\n", program_store[pc].first_reg_val);
+			if (instruction_param <= 0xB && instruction_param % 2 == 0) printf ("2nd source register: %d\n\n", program_store[pc].second_reg_val);
+			else printf("Immediate value: %d\n\n", program_store[pc].immediate);
+        }
+		pc++;
+	}
 
 	/*
 
@@ -210,6 +238,10 @@ int main(int argc, char *argv[]) {
 
 	return 99;
 }
+
+//////////////////////////
+// END OF MAIN
+//////////////////////////
 
 int32_t StringToHex(char *hex_string){
     uint32_t temp;
@@ -257,110 +289,135 @@ void opcode_master(decodedLine line) {
 	was_control_flow = 0;
 
 	
-    switch(opcode) {	
+    switch(opcode) {
+		////////////////////////////////	
 		// Arithmetic Instructions:
+		////////////////////////////////
 		{
 		case ADD:
 			if (mode == DEBUG) printf("ADD\n");
 			addfunc(rd, rs, rt, false);
+			
 			break;
 			
 		case ADDI:
 			if (mode == DEBUG) printf("ADDI\n");
 			addfunc(rt, rs, immediate, true);
+			
 			break;
 			
 		case SUB:
 			if (mode == DEBUG) printf("SUB\n");
 			subfunc(rd, rs, rt, false);
+		
 			break;
 			
 		case SUBI:
 			if (mode == DEBUG) printf("SUBI\n");
 			subfunc(rt, rs, immediate, true);
+
 			break;
 			
 		case MUL:
 			if (mode == DEBUG) printf("MUL\n");
 			mulfunc(rd, rs, rt, false);
-			
+
 			break;
 			
 		case MULI:
 			if (mode == DEBUG) printf("MULI\n");
 			mulfunc(rt, rs, immediate, true);
+
 			break;
 		}
 		
-		
+		////////////////////////////////
 		// Logical Instructions:
+		////////////////////////////////
 		{
 		case OR:
 			if (mode == DEBUG) printf("OR\n");
 			orfunc(rd, rs, rt, false);
+
 			break;
 			
 		case ORI:
 			if (mode == DEBUG) printf("ORI\n");
 			orfunc(rt, rs, immediate, true);
+
 			break;
 			
 		case AND:
 			if (mode == DEBUG) printf("AND\n");
 			andfunc(rd, rs, rt, false);
+
 			break;
 			
 		case ANDI:
 			if (mode == DEBUG) printf("ANDI\n");
 			andfunc(rt, rs, immediate, true);
+
 			break;
 			
 		case XOR:
 			if (mode == DEBUG) printf("XOR\n");
 			xorfunc(rd, rs, rt, false);
+
 			break;
 			
 		case XORI:
 			if (mode == DEBUG) printf("XORI\n");
 			xorfunc(rt, rs, immediate, true);
+
 			break;	
 		}
 		
-		
+		////////////////////////////////
 		// Memory Access Instructions:
+		////////////////////////////////
 		{
 		case LDW:
 			if (mode == DEBUG) printf("LDW\n");
 			ldwfunc(rt, rs, immediate);
+
 			break;
 			
 		case STW:
 			if (mode == DEBUG) printf("STW\n");
 			stwfunc(rt, rs, immediate);
+
 			break;
 		}
 		
-		
+		////////////////////////////////
 		// Control Flow Instructions:
+		////////////////////////////////
 		{
 		case BZ:
 			if (mode == DEBUG) printf("BZ\n");
+			pc--;
 			bzfunc(rs, immediate);
 			break;
 			
 		case BEQ:
 			if (mode == DEBUG) printf("BEQ\n");
+			pc--;
 			beqfunc(rs, rt, immediate);
+	
 			break;
 			
 		case JR:
 			if (mode == DEBUG) printf("JR\n");
+			pc--;
 			jrfunc(rs);
+
 			break;
 			
 		case HALT:
 			if (mode == DEBUG) printf("HALT: ENDING PROGRAM\n\n\n\n\n");
 			haltfunc();
+			pc--;
+
 			break;
 		}
 		
@@ -375,13 +432,13 @@ void opcode_master(decodedLine line) {
 	if (mode == DEBUG) {
 
 		// Differentiate between R-Type and I-Type
-		if (rtype == 1)
+		if (rtype == 1) {
 			printf("R-Type:    rs: %2u   rt: %2u   rd: %2u\n", rs, rt, rd);
-		
-		else
+		}
+		else {
 			printf("I-Type:    rs: %2u   rt: %2u   imm: %6d\n", rs, rt, (int16_t)immediate);
-		
-		printf("PC: %d\n", pc);
+		}
+		printf("PC: %d\n", ++pc);
 
 		printf("\n\n\n\n");
 	}
