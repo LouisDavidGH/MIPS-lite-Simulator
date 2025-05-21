@@ -26,6 +26,7 @@
 #define CLOCK_SIZE 5
 
 // Mode values
+#define DEBUG_EXTRA 2
 #define DEBUG 1
 #define NORMAL 0
 
@@ -115,7 +116,8 @@ void jrfunc(int rs);
 void haltfunc();
 
 int32_t StringToHex(char *hex_string);
-
+void print_line(decodedLine line, int index);
+void print_registers();
 
 
 

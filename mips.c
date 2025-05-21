@@ -49,6 +49,7 @@ typedef struct pipeline_status_and_instruction {
 
 // Initialize memory array - Initialize Register array
 int32_t registers[NUM_REGISTERS] = {0};
+int usedRegisters[NUM_REGISTERS] = {0};
 int32_t memory[MEMORY_SIZE];
 
 // Stores all of the line's information in one array
@@ -75,7 +76,6 @@ int global_clk[CLOCK_SIZE];
 
 bool rtype = 0;
 bool was_control_flow = 0;
-void print_line(decodedLine line, int index);
 //////////////////////////
 // MAIN
 //////////////////////////
@@ -93,6 +93,8 @@ int main(int argc, char *argv[]) {
 	// Set mode specified in the first argument
 	if (strcmp(argv[1], "DEBUG") == 0)
 		mode = DEBUG;
+	else if (strcmp(argv[1], "DEBUG_EXTRA") == 0)
+		mode = DEBUG_EXTRA;
 	else if (strcmp(argv[1], "NORMAL") == 0)
 		mode = NORMAL;
 	else {
@@ -109,7 +111,9 @@ int main(int argc, char *argv[]) {
     }
 	
     
-    
+	if (mode == DEBUG_EXTRA) {
+		printf("-- Going through testcase lines --\n");
+	}
     // Read each line of the trace file
     while (fgets(line, sizeof(line), file)) {
 		line_number++;
@@ -152,11 +156,11 @@ int main(int argc, char *argv[]) {
 		}
 		// Note - Even if some instructions don't use all the register/immediate values, they are still populated here
 		else if ( instruction_param <= 0x11){
-			int32_t dest_reg = (rawHex << 6) >> 27;
-			int32_t first_reg = (rawHex << 11) >> 27;
+			int32_t first_reg = (rawHex << 6) >> 27;
+			int32_t second_reg = (rawHex << 11) >> 27;
 			int32_t immediate_val = (rawHex << 16) >> 16;
-			program_store[line_number - 1].dest_register = dest_reg;
 			program_store[line_number - 1].first_reg_val = first_reg;
+			program_store[line_number - 1].second_reg_val = second_reg;
 			program_store[line_number - 1].immediate = immediate_val;
 			program_store[line_number - 1].rawHexVal = rawHex;
 		}
@@ -164,38 +168,27 @@ int main(int argc, char *argv[]) {
 		else {
 			if (mode == DEBUG) {
             printf("Line %d\n", line_number);
-           //  printf("Binary: %u\n", program_store[line_number - 1]);
             printf("%d does not map to a valid instruction\n\n", program_store[line_number - 1].instruction);
         }
 			continue;
 		}
-		print_line(program_store[line_number - 1], line_number - 1);
+		// if (mode == DEBUG_EXTRA) {
+		// 	print_line(program_store[line_number - 1], line_number - 1);
+		// }
 
-		// opcode_master(program_store[line_number - 1]);
-		
-        // DEBUG: print each binary string
-        // if (mode == DEBUG) {
-        //     printf("---Line %d---\n", line_number);
-        //    //  printf("Binary: %u\n", program_store[line_number - 1]);
-        //     printf("Hex Number: %X\n", rawHex);
-		// 	printf("Instruction: 0x%X, %d\n", program_store[line_number - 1].instruction, program_store[line_number - 1].instruction);
-		// 	printf("Destination register: %d\n", program_store[line_number - 1].dest_register);
-		// 	printf("1st source register: %d\n", program_store[line_number - 1].first_reg_val);
-		// 	if (instruction_param <= 0xB && instruction_param % 2 == 0) printf ("2nd source register: %d\n\n", program_store[line_number - 1].second_reg_val);
-		// 	else printf("Immediate value: %d\n\n", program_store[line_number - 1].immediate);
-        // }
-		
-
-        // CONTINUE
     }
+
+	if (mode == DEBUG_EXTRA) {
+		printf("\n-- Going through the instructions --\n");
+	}
 	int Running = 1;
 	// THIS SECTION IS THE PROGRAM COUNTER KEEPING TRACK OF EACH INSTRUCTION UNTIL HALTED
 	while(Running) {
-		if (pc == maxline || program_store[pc].instruction == HALT) {
+		
+		if (pc == maxline + 1) {
+			printf("Error not valid area\n");
 			break;
 		}
-		// Using the program counter to go through the list.
-		opcode_master(program_store[pc]);
 		// print_line(program_store[pc], pc);
 		// bit shift the intruction param by twenty six
 		int32_t instruction_param = program_store[pc].rawHexVal>>26;
@@ -211,7 +204,13 @@ int main(int argc, char *argv[]) {
 			if (instruction_param <= 0xB && instruction_param % 2 == 0) printf ("2nd source register: %d\n\n", program_store[pc].second_reg_val);
 			else printf("Immediate value: %d\n\n", program_store[pc].immediate);
         }
-		pc++;
+
+		// Using the program counter to go through the list.
+		opcode_master(program_store[pc]);
+		if (program_store[pc].instruction == HALT) {
+			break;
+		}
+		
 	}
 
 	/*
@@ -273,31 +272,90 @@ void print_stats(){
     printf("  Logical:		%d\n", logic_count);
     printf("  Memory Access:	%d\n", memacc_count);
     printf("  Control Flow:		%d\n", cflow_count);
-	
+	printf("  Program Counter   	%d\n", pc);
+	print_registers();
 	return;
 }
 
-void print_line(decodedLine line, int index){
-	unsigned int opcode 	= line.instruction;
-	unsigned int rd 		= line.dest_register;
-	unsigned int rs 		= line.first_reg_val;
-	unsigned int rt 		= line.second_reg_val;
-	unsigned int immediate 	= line.immediate;
-    printf("\nLine Number: [%d]\n",index); 
-    printf("  Opcode:		%d\n", line.instruction);
-    printf("  rd:			%d\n", line.dest_register);
-    printf("  rs:			%d\n", line.first_reg_val);
-    printf("  rt:			%d\n", line.second_reg_val);
-    printf("  immediate:		%d\n", line.immediate);
-	
-	
-	return;
+void print_registers() {
+	printf("\nProgram counter: %d\n", pc);
+	for (int i = 0; i < NUM_REGISTERS; i++) {
+		if (usedRegisters[i] == 1) {
+			printf("R%d: %d\n", i, registers[i]);
+		}
+	}
 }
+
+void print_line(decodedLine line, int index) {
+    unsigned int opcode     = line.instruction;
+    unsigned int rd         = line.dest_register;
+    unsigned int rs         = line.first_reg_val;
+    unsigned int rt         = line.second_reg_val;
+    unsigned int immediate  = line.immediate;
+	printf("\n---------------------------------\n");
+    printf("\nLine Number: [%d]\n", index);
+    printf("  Raw Hex: %08X\n", line.rawHexVal);
+
+    // Print instruction name based on opcode
+    printf("  Instruction: ");
+    switch (opcode) {
+		// R type arithmetic print 
+        case ADD:   printf("ADD (R-type)\n"); break;
+        case SUB:   printf("SUB (R-type)\n"); break;
+        case MUL:   printf("MUL (R-type)\n"); break;
+        case OR:    printf("OR (R-type)\n"); break;
+        case AND:   printf("AND (R-type)\n"); break;
+        case XOR:   printf("XOR (R-type)\n"); break;
+		
+		// I type arithmetic print 
+        case ADDI:  printf("ADDI (I-type)\n"); break;
+        case SUBI:  printf("SUBI (I-type)\n"); break;
+        case MULI:  printf("MULI (I-type)\n"); break;
+        case ORI:   printf("ORI (I-type)\n"); break;
+        case ANDI:  printf("ANDI (I-type)\n"); break;
+        case XORI:  printf("XORI (I-type)\n"); break;
+
+        case LDW:   printf("LDW (I-type)\n"); break;
+        case STW:   printf("STW (I-type)\n"); break;
+
+        case BZ:    printf("BZ (I-type)\n"); break;
+        case BEQ:   printf("BEQ (I-type)\n"); break;
+
+        case JR:    printf("JR (R-type)\n"); break;
+        case HALT:  printf("HALT\n"); break;
+
+        default:    printf("UNKNOWN\n"); break;
+    }
+
+    printf("  Opcode:       %d\n", opcode);
+
+    // For R-type instructions, print rd, rs, rt
+    if (opcode == ADD || opcode == SUB || opcode == MUL || opcode == OR || opcode == AND || opcode == XOR || opcode == JR) {
+        printf("  rs:           %d\n", rs);
+        printf("  rt:           %d\n", rt);
+		printf("  rd:           %d\n", rd);
+    }
+    // For I-type instructions, print rd/rs and immediate
+    else if (opcode == ADDI || opcode == SUBI || opcode == MULI || opcode == ORI || opcode == ANDI || opcode == XORI ||
+             opcode == LDW || opcode == STW || opcode == BZ || opcode == BEQ) {
+				rd = rs;
+        printf("  rd/rs:        %d\n", rd);   // Depending on ISA, could be dest or source register
+        printf("  rt:           %d\n", rt);
+		printf("  immediate:    %d\n", (int16_t)immediate); // sign-extended immediate
+    }
+    else {
+        // For instructions like HALT or unknown, just print general info
+        printf("  rd:           %d\n", rd);
+        printf("  rs:           %d\n", rs);
+        printf("  rt:           %d\n", rt);
+        printf("  immediate:    %d\n", immediate);
+    }
+}
+
 
 
 void opcode_master(decodedLine line) {
 
-	//
     unsigned int opcode 	= line.instruction;
 	unsigned int rd 		= line.dest_register;
 	unsigned int rs 		= line.first_reg_val;
@@ -305,8 +363,15 @@ void opcode_master(decodedLine line) {
 	unsigned int immediate 	= line.immediate;
 	rtype = 0;
 	was_control_flow = 0;
-
 	
+	// if (mode == DEBUG_EXTRA) {
+	// 	printf("\nOpcode: 0x%02X\n", opcode);
+	// 	printf("RD: %u\n", rd);
+	// 	printf("RS: %u\n", rs);
+	// 	printf("RT: %u\n", rt);
+	// 	printf("Immediate: %u\n", immediate);
+	// }
+
     switch(opcode) {
 		////////////////////////////////	
 		// Arithmetic Instructions:
@@ -438,7 +503,6 @@ void opcode_master(decodedLine line) {
 
 			break;
 		}
-		
 	
 		default:
 			if (mode == DEBUG) printf("Error: Unknown opcode 0x%02X. Exiting.\n", opcode);
@@ -456,36 +520,65 @@ void opcode_master(decodedLine line) {
 		else {
 			printf("I-Type:    rs: %2u   rt: %2u   imm: %6d\n", rs, rt, (int16_t)immediate);
 		}
-		printf("PC: %d\n", ++pc);
+		printf("PC: %d\n", pc);
 
 		printf("\n\n\n\n");
 	}
 	
-	
+	if (mode == DEBUG_EXTRA) {
+			print_line(line, pc);
+			printf("\n -- Registers Used -- :");
+			print_registers();
+	}
 	// Unless control flow instruction modified pc directly, increment by default
 	if (was_control_flow == 0)
 		pc++;
 	
 }
 
-
+// addfunc(rt, rs, immediate, true);
 void addfunc(int dest, int src1, int src2, bool is_immediate) {
-	if (!is_immediate) rtype = 1;
+    // Mark registers as used if not already marked
+    // Note: For immediate instructions, src2 is not a register index
+    if (usedRegisters[dest] == 0 || usedRegisters[src1] == 0) {
+        usedRegisters[dest] = 1;
+        usedRegisters[src1] = 1;
+        if (!is_immediate) {
+            usedRegisters[src2] = 1;  // Only mark src2 if it's a register (not immediate)
+        }
+    }
+
+    // If instruction is R-type (register-register), set rtype flag
+    if (!is_immediate) rtype = 1;
+
+    // Retrieve value from source register 1
     int32_t val1 = registers[src1];
-    int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2]; // sign-extend imm
+
+    // If immediate, sign-extend src2 (16-bit immediate), else get value from source register 2
+    int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
+
+    // Perform the addition and store result in destination register
     registers[dest] = val1 + val2;
 
+    // Increment count of arithmetic instructions executed
     arith_count++;
-    if (is_immediate)
-        itype_count++;
-    else
-        rtype_count++;
 
+    // Increment count based on instruction type (immediate or register)
+    if (is_immediate)
+        itype_count++;  // I-type (immediate) instruction count
+    else
+        rtype_count++;  // R-type instruction count
+
+    // Increment total instruction count executed
     total_inst_count++;
 }
 
 
+
 void subfunc(int dest, int src1, int src2, bool is_immediate) {
+	
+	usedRegisters[dest] = 1;
+	
 	if (!is_immediate) rtype = 1;
     int32_t val1 = registers[src1];
     int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
@@ -507,6 +600,10 @@ void mulfunc(int dest, int src1, int src2, bool is_immediate){
     int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
     registers[dest] = val1 * val2;
 
+	usedRegisters[dest] = 1;
+	usedRegisters[src1] = 1;
+	usedRegisters[src2] = 1;
+	
     arith_count++;
     if (is_immediate)
         itype_count++;
@@ -522,6 +619,10 @@ void orfunc(int dest, int src1, int src2, bool is_immediate) {
     int32_t val1 = registers[src1];
     int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
     registers[dest] = val1 | val2;
+
+	usedRegisters[dest] = 1;
+	usedRegisters[src1] = 1;
+	usedRegisters[src2] = 1;
 
     logic_count++;
     if (is_immediate)
@@ -539,6 +640,10 @@ void andfunc(int dest, int src1, int src2, bool is_immediate) {
     int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
     registers[dest] = val1 & val2;
 
+	usedRegisters[dest] = 1;
+	usedRegisters[src1] = 1;
+	usedRegisters[src2] = 1;
+
     logic_count++;
     if (is_immediate)
         itype_count++;
@@ -554,6 +659,10 @@ void xorfunc(int dest, int src1, int src2, bool is_immediate) {
     int32_t val1 = registers[src1];
     int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
     registers[dest] = val1 ^ val2;
+
+	usedRegisters[dest] = 1;
+	usedRegisters[src1] = 1;
+	usedRegisters[src2] = 1;
 
     logic_count++;
     if (is_immediate)
@@ -574,6 +683,7 @@ void ldwfunc(int rt, int rs, int imm) {
     }
 
     registers[rt] = memory[addr / 4];
+	usedRegisters[rt] = 1;
 
     memacc_count++;
     itype_count++;
@@ -590,6 +700,7 @@ void stwfunc(int rt, int rs, int imm) {
     }
 
     memory[addr / 4] = registers[rt];
+	usedRegisters[rt] = 1;
 
     memacc_count++;
     itype_count++;
@@ -605,6 +716,7 @@ void bzfunc(int rs, int imm) {
     if (registers[rs] == 0) {
         pc += (int16_t)imm;
         was_control_flow = 1;
+		usedRegisters[rs] = 1;
     }
 }
 
@@ -616,6 +728,7 @@ void beqfunc(int rs, int rt, int imm) {
     if (registers[rs] == registers[rt]) {
         pc += (int16_t)imm;
         was_control_flow = 1;
+		usedRegisters[rs] = 1;
     }
 }
 
@@ -627,6 +740,7 @@ void jrfunc(int rs) {
 	was_control_flow = 1;
 
     pc = registers[rs];  // Assume PC holds instruction index, not byte address
+	usedRegisters[rs] = 1;
 }
 
 
