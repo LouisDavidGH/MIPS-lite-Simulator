@@ -78,6 +78,24 @@ void end_program();
 // dest - destination register index,
 // src1, src2 - source register indices,
 // is_immediate - flag indicating whether the second operand is an immediate value.
+/*
+		Instruction Formatting
+		R-type
+		┌────────┬──────┬──────┬──────┬────────────┐
+		│ Opcode │  Rs  │  Rt  │  Rd  │  Unused    │
+		├────────┼──────┼──────┼──────┼────────────┤
+		│  6 bit │ 5bit │ 5bit │ 5bit │  11 bits   │
+		└────────┴──────┴──────┴──────┴────────────┘
+		Used by: ADD, SUB, MUL, OR, AND, XOR
+
+		I-type
+		┌────────┬──────┬──────┬──────────────────┐
+		│ Opcode │  Rs  │  Rt  │    Immediate     │
+		├────────┼──────┼──────┼──────────────────┤
+		│  6 bit │ 5bit │ 5bit │     16 bits      │
+		└────────┴──────┴──────┴──────────────────┘
+		Used by: ADDI, SUBI, MULI, ORI, ANDI, XORI, LDW, STW, BZ, BEQ
+		*/
 
 // Performs addition operation.
 void addfunc(int dest, int src1, int src2, bool is_immediate);
@@ -109,9 +127,26 @@ void bzfunc(int rs, int imm);
 // Branch if equal function: branches if registers rt and rs are equal, using imm as offset.
 void beqfunc(int rt, int rs, int imm);
 
+/*
+    ┌────────┬──────┬─────────────────────────┐
+    │ Opcode │  Rs  │      Unused (26-bit)    │
+    ├────────┼──────┼─────────────────────────┤
+    │  6 bit │ 5bit │         21 bits         │
+    └────────┴──────┴─────────────────────────┘
+    Used by: JR
+
+*/
 // Jump register function: jumps to the address contained in register rs.
 void jrfunc(int rs);
 
+/*
+    ┌────────┬───────────────────────────────┐
+    │ Opcode │         Unused (26-bit)       │
+    ├────────┼───────────────────────────────┤
+    │  6 bit │           26 bits             │
+    └────────┴───────────────────────────────┘
+    Used by: HALT
+*/
 // Halt function: stops program execution.
 void haltfunc();
 

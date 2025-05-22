@@ -137,6 +137,25 @@ int main(int argc, char *argv[]) {
 		// this is converting the intake to an integer
 		uint32_t rawHex = StringToHex(line);
 
+		/*
+		Instruction Formatting
+		R-type
+		┌────────┬──────┬──────┬──────┬────────────┐
+		│ Opcode │  Rs  │  Rt  │  Rd  │  Unused    │
+		├────────┼──────┼──────┼──────┼────────────┤
+		│  6 bit │ 5bit │ 5bit │ 5bit │  11 bits   │
+		└────────┴──────┴──────┴──────┴────────────┘
+		Used by: ADD, SUB, MUL, OR, AND, XOR
+
+		I-type
+		┌────────┬──────┬──────┬──────────────────┐
+		│ Opcode │  Rs  │  Rt  │    Immediate     │
+		├────────┼──────┼──────┼──────────────────┤
+		│  6 bit │ 5bit │ 5bit │     16 bits      │
+		└────────┴──────┴──────┴──────────────────┘
+		Used by: ADDI, SUBI, MULI, ORI, ANDI, XORI, LDW, STW, BZ, BEQ
+		*/
+
 		// bit shift the intruction param by twenty six
 		int32_t instruction_param = rawHex>>26;
 		maxline = line_number - 1;
@@ -492,8 +511,6 @@ void print_line(decodedLine line, int index) {
 		printf("  Operands : rd = R[%d], rs = R[%d], rt = R[%d]\n", rd, rs, rt);
     }
 }
-
-
 
 void opcode_master(decodedLine line) {
 
