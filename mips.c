@@ -265,6 +265,7 @@ void end_program(){
 }
 
 void print_stats(){
+	printf("---------------------------------");
     printf("\nInstruction Count Statistics:\n"); 
     printf("  Total Instructions:	%d\n", total_inst_count);
     printf("  R-Type:		%d\n", rtype_count);
@@ -303,7 +304,7 @@ void print_line(decodedLine line, int index) {
     unsigned int rd         = line.dest_register;
     unsigned int rs         = line.first_reg_val;
     unsigned int rt         = line.second_reg_val;
-    unsigned int immediate  = line.immediate;
+    unsigned int imm  		= line.immediate;
 
     printf("\n---------------------------------\n");
     printf("\nLine Number: [%d]\n", index);
@@ -314,41 +315,133 @@ void print_line(decodedLine line, int index) {
     printf("\n");
 
     // Print instruction name based on opcode
-    printf("  Instruction: ");
-    switch (opcode) {
-        case ADD:   printf("ADD (R-type)\n"); break;
-        case SUB:   printf("SUB (R-type)\n"); break;
-        case MUL:   printf("MUL (R-type)\n"); break;
-        case OR:    printf("OR (R-type)\n"); break;
-        case AND:   printf("AND (R-type)\n"); break;
-        case XOR:   printf("XOR (R-type)\n"); break;
-        
-        case ADDI:  printf("ADDI (I-type)\n"); break;
-        case SUBI:  printf("SUBI (I-type)\n"); break;
-        case MULI:  printf("MULI (I-type)\n"); break;
-        case ORI:   printf("ORI (I-type)\n"); break;
-        case ANDI:  printf("ANDI (I-type)\n"); break;
-        case XORI:  printf("XORI (I-type)\n"); break;
+	printf("  Instruction: ");
+	switch (opcode) {
+		// ----------------- R-type Instructions -----------------
+		case ADD:
+			printf("ADD   (R-type)\n");
+			printf("    Format   : ADD rd, rs, rt\n");
+			printf("    Equation : R[%d] = R[%d] + R[%d]\n", rd, rs, rt);
+			break;
 
-        case LDW:   printf("LDW (I-type)\n"); break;
-        case STW:   printf("STW (I-type)\n"); break;
+		case SUB:
+			printf("SUB   (R-type)\n");
+			printf("    Format   : SUB rd, rs, rt\n");
+			printf("    Equation : R[%d] = R[%d] - R[%d]\n", rd, rs, rt);
+			break;
 
-        case BZ:    printf("BZ (I-type)\n"); break;
-        case BEQ:   printf("BEQ (I-type)\n"); break;
+		case MUL:
+			printf("MUL   (R-type)\n");
+			printf("    Format   : MUL rd, rs, rt\n");
+			printf("    Equation : R[%d] = R[%d] * R[%d]\n", rd, rs, rt);
+			break;
 
-        case JR:    printf("JR (R-type)\n"); break;
-        case HALT:  printf("HALT\n"); break;
+		case OR:
+			printf("OR    (R-type)\n");
+			printf("    Format   : OR rd, rs, rt\n");
+			printf("    Equation : R[%d] = R[%d] | R[%d]\n", rd, rs, rt);
+			break;
 
-        default:    printf("UNKNOWN\n"); break;
-    }
+		case AND:
+			printf("AND   (R-type)\n");
+			printf("    Format   : AND rd, rs, rt\n");
+			printf("    Equation : R[%d] = R[%d] & R[%d]\n", rd, rs, rt);
+			break;
+
+		case XOR:
+			printf("XOR   (R-type)\n");
+			printf("    Format   : XOR rd, rs, rt\n");
+			printf("    Equation : R[%d] = R[%d] ^ R[%d]\n", rd, rs, rt);
+			break;
+
+		// ----------------- I-type Arithmetic Instructions -----------------
+		case ADDI:
+			printf("ADDI  (I-type)\n");
+			printf("    Format   : ADDI rt, rs, imm\n");
+			printf("    Equation : R[%d] = R[%d] + %d\n", rt, rs, imm);
+			break;
+
+		case SUBI:
+			printf("SUBI  (I-type)\n");
+			printf("    Format   : SUBI rt, rs, imm\n");
+			printf("    Equation : R[%d] = R[%d] - %d\n", rt, rs, imm);
+			break;
+
+		case MULI:
+			printf("MULI  (I-type)\n");
+			printf("    Format   : MULI rt, rs, imm\n");
+			printf("    Equation : R[%d] = R[%d] * %d\n", rt, rs, imm);
+			break;
+
+		case ORI:
+			printf("ORI   (I-type)\n");
+			printf("    Format   : ORI rt, rs, imm\n");
+			printf("    Equation : R[%d] = R[%d] | %d\n", rt, rs, imm);
+			break;
+
+		case ANDI:
+			printf("ANDI  (I-type)\n");
+			printf("    Format   : ANDI rt, rs, imm\n");
+			printf("    Equation : R[%d] = R[%d] & %d\n", rt, rs, imm);
+			break;
+
+		case XORI:
+			printf("XORI  (I-type)\n");
+			printf("    Format   : XORI rt, rs, imm\n");
+			printf("    Equation : R[%d] = R[%d] ^ %d\n", rt, rs, imm);
+			break;
+
+		// ----------------- Load/Store Instructions -----------------
+		case LDW:
+			printf("LDW   (I-type)\n");
+			printf("    Format   : LDW rt, offset(rs)\n");
+			printf("    Equation : R[%d] = MEM[R[%d] + %d]\n", rt, rs, imm);
+			break;
+
+		case STW:
+			printf("STW   (I-type)\n");
+			printf("    Format   : STW rt, offset(rs)\n");
+			printf("    Equation : MEM[R[%d] + %d] = R[%d]\n", rs, imm, rt);
+			break;
+
+		// ----------------- Branch Instructions -----------------
+		case BZ:
+			printf("BZ    (I-type)\n");
+			printf("    Format   : BZ rs, offset\n");
+			printf("    Equation : if (R[%d] == 0) PC += %d\n", rs, imm);
+			break;
+
+		case BEQ:
+			printf("BEQ   (I-type)\n");
+			printf("    Format   : BEQ rs, rt, offset\n");
+			printf("    Equation : if (R[%d] == R[%d]) PC += %d\n", rs, rt, imm);
+			break;
+
+		// ----------------- Jump Register -----------------
+		case JR:
+			printf("JR    (R-type)\n");
+			printf("    Format   : JR rs\n");
+			printf("    Equation : PC = R[%d]\n", rs);
+			break;
+
+		// ----------------- Halt -----------------
+		case HALT:
+			printf("HALT\n");
+			break;
+
+		// ----------------- Unknown Instruction -----------------
+		default:
+			printf("UNKNOWN INSTRUCTION\n");
+			break;
+	}
 
     // Print opcode
-    printf("  Opcode:       %d 	[", opcode);
+    printf("\n  Opcode:       %d 	[", opcode);
     printBinaryFixedWidth(opcode, 6);
     printf("]\n");
-
+	
     // For R-type instructions
-    if (opcode == ADD || opcode == SUB || opcode == MUL || opcode == OR || opcode == AND || opcode == XOR || opcode == JR) {
+    if (opcode == ADD || opcode == SUB || opcode == MUL || opcode == OR || opcode == AND || opcode == XOR || opcode == JR) {	
         printf("  rs:           %d 	[", rs);
         printBinaryFixedWidth(rs, 5);
         printf("]\n");
@@ -360,6 +453,8 @@ void print_line(decodedLine line, int index) {
         printf("  rd:           %d 	[", rd);
         printBinaryFixedWidth(rd, 5);
         printf("]\n");
+		printf("  Operands : rd = R[%d], rs = R[%d], rt = R[%d]\n", rd, rs, rt);
+		
     }
     // For I-type instructions
     else if (opcode == ADDI || opcode == SUBI || opcode == MULI || opcode == ORI || opcode == ANDI || opcode == XORI ||
@@ -372,9 +467,10 @@ void print_line(decodedLine line, int index) {
         printBinaryFixedWidth(rt, 5);
         printf("]\n");
 
-        printf("  immediate:    %d 	[", (int16_t)immediate);
-        printBinaryFixedWidth(immediate & 0xFFFF, 16);
+        printf("  immediate:    %d 	[", (int16_t)imm);
+        printBinaryFixedWidth(imm & 0xFFFF, 16);
         printf("]\n");
+		printf("  Operands : rt = R[%d], rs = R[%d], imm = %d\n", rt, rs, imm);
     }
     // For HALT or unknown
     else {
@@ -390,9 +486,10 @@ void print_line(decodedLine line, int index) {
         printBinaryFixedWidth(rt, 5);
         printf("]\n");
 
-        printf("  immediate:    %d 	[", immediate);
-        printBinaryFixedWidth(immediate & 0xFFFF, 16);
+        printf("  immediate:    %d 	[", imm);
+        printBinaryFixedWidth(imm & 0xFFFF, 16);
         printf("]\n");
+		printf("  Operands : rd = R[%d], rs = R[%d], rt = R[%d]\n", rd, rs, rt);
     }
 }
 
