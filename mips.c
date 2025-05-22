@@ -1,6 +1,6 @@
 /**
  * mips.c - Source code file for a MIPS-lite simulation
- *
+ * 
  * @authors:    Evan Brown (evbr2@pdx.edu)
  * 				Louis-David Gendron-Herndon (loge2@pdx.edu)
  *				Ameer Melli (amelli@pdx.edu)
@@ -146,12 +146,13 @@ int main(int argc, char *argv[]) {
 		// If - instruction is register based : Else - instruction is immediate based
 		//		This block populates the instruction struct with appropriate register values and immediates based on instruction type
 		if (instruction_param <= 0xB && instruction_param % 2 == 0){
-			int32_t dest_reg = (rawHex << 6) >> 27;
-			int32_t first_reg = (rawHex << 11) >> 27;
-			int32_t second_reg = (rawHex << 16) >> 27;
-			program_store[line_number - 1].dest_register = dest_reg;
+			int32_t first_reg= (rawHex << 6) >> 27;
+			int32_t second_reg = (rawHex << 11) >> 27;
+			int32_t dest_reg= (rawHex << 16) >> 27;
+
 			program_store[line_number - 1].first_reg_val = first_reg;
 			program_store[line_number - 1].second_reg_val = second_reg;
+			program_store[line_number - 1].dest_register = dest_reg;
 			program_store[line_number - 1].rawHexVal = rawHex;
 		}
 		// Note - Even if some instructions don't use all the register/immediate values, they are still populated here
@@ -286,6 +287,15 @@ void print_registers() {
 	}
 }
 
+void printBinary(unsigned int value, int bits) {
+    for (int i = bits - 1; i >= 0; i--) {
+        printf("%c", (value & (1 << i)) ? '1' : '0');
+        if (i % 4 == 0 && i != 0) printf(" "); // Optional: space every 4 bits for readability
+    }
+    printf("\n");
+}
+
+
 void print_line(decodedLine line, int index) {
     unsigned int opcode     = line.instruction;
     unsigned int rd         = line.dest_register;
@@ -295,6 +305,9 @@ void print_line(decodedLine line, int index) {
 	printf("\n---------------------------------\n");
     printf("\nLine Number: [%d]\n", index);
     printf("  Raw Hex: %08X\n", line.rawHexVal);
+	printf("\nBinary: ");
+	printBinary(line.rawHexVal, 32);
+
 
     // Print instruction name based on opcode
     printf("  Instruction: ");
