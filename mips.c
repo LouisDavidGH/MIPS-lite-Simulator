@@ -49,7 +49,7 @@ typedef struct pipeline_status_and_instruction {
 
 // Initialize memory array - Initialize Register array
 int32_t registers[NUM_REGISTERS] = {0};
-int usedRegisters[NUM_REGISTERS] = {0};
+int usedRegisters[NUM_REGISTERS] = {0}; // Flag for register if used
 int32_t memory[MEMORY_SIZE];
 
 // Stores all of the line's information in one array
@@ -146,23 +146,23 @@ int main(int argc, char *argv[]) {
 		// If - instruction is register based : Else - instruction is immediate based
 		//		This block populates the instruction struct with appropriate register values and immediates based on instruction type
 		if (instruction_param <= 0xB && instruction_param % 2 == 0){
-			int32_t first_reg= (rawHex << 6) >> 27;
-			int32_t second_reg = (rawHex << 11) >> 27;
-			int32_t dest_reg= (rawHex << 16) >> 27;
+			int32_t first_reg= (rawHex << 6) >> 27;		// rs
+			int32_t second_reg = (rawHex << 11) >> 27;  // rt
+			int32_t dest_reg= (rawHex << 16) >> 27;     // rd
 
-			program_store[line_number - 1].first_reg_val = first_reg;
-			program_store[line_number - 1].second_reg_val = second_reg;
-			program_store[line_number - 1].dest_register = dest_reg;
+			program_store[line_number - 1].first_reg_val = first_reg;	// rs
+			program_store[line_number - 1].second_reg_val = second_reg; // rt
+			program_store[line_number - 1].dest_register = dest_reg;	// rd
 			program_store[line_number - 1].rawHexVal = rawHex;
 		}
 		// Note - Even if some instructions don't use all the register/immediate values, they are still populated here
 		else if ( instruction_param <= 0x11){
-			int32_t first_reg = (rawHex << 6) >> 27;
-			int32_t second_reg = (rawHex << 11) >> 27;
-			int32_t immediate_val = (rawHex << 16) >> 16;
-			program_store[line_number - 1].first_reg_val = first_reg;
-			program_store[line_number - 1].second_reg_val = second_reg;
-			program_store[line_number - 1].immediate = immediate_val;
+			int32_t first_reg = (rawHex << 6) >> 27;					// rs
+			int32_t second_reg = (rawHex << 11) >> 27;					// rt
+			int32_t immediate_val = (rawHex << 16) >> 16;				// immediate
+			program_store[line_number - 1].first_reg_val = first_reg;	// rs
+			program_store[line_number - 1].second_reg_val = second_reg;	// rt/rd
+			program_store[line_number - 1].immediate = immediate_val;	// immediate
 			program_store[line_number - 1].rawHexVal = rawHex;
 		}
 		// Am I missing some logic for getting other instructions?
@@ -352,7 +352,7 @@ void print_line(decodedLine line, int index) {
     else if (opcode == ADDI || opcode == SUBI || opcode == MULI || opcode == ORI || opcode == ANDI || opcode == XORI ||
              opcode == LDW || opcode == STW || opcode == BZ || opcode == BEQ) {
 				rd = rs;
-        printf("  rd/rs:        %d\n", rd);   // Depending on ISA, could be dest or source register
+        printf("  rd/rs:        %d\n", rs);   // Depending on ISA, could be dest or source register
         printf("  rt:           %d\n", rt);
 		printf("  immediate:    %d\n", (int16_t)immediate); // sign-extended immediate
     }
@@ -590,7 +590,15 @@ void addfunc(int dest, int src1, int src2, bool is_immediate) {
 
 void subfunc(int dest, int src1, int src2, bool is_immediate) {
 	
-	usedRegisters[dest] = 1;
+	// Mark registers as used if not already marked
+    // Note: For immediate instructions, src2 is not a register index
+    if (usedRegisters[dest] == 0 || usedRegisters[src1] == 0) {
+        usedRegisters[dest] = 1;
+        usedRegisters[src1] = 1;
+        if (!is_immediate) {
+            usedRegisters[src2] = 1;  // Only mark src2 if it's a register (not immediate)
+        }
+    }
 	
 	if (!is_immediate) rtype = 1;
     int32_t val1 = registers[src1];
@@ -608,6 +616,16 @@ void subfunc(int dest, int src1, int src2, bool is_immediate) {
 
 
 void mulfunc(int dest, int src1, int src2, bool is_immediate){
+	// Mark registers as used if not already marked
+    // Note: For immediate instructions, src2 is not a register index
+    if (usedRegisters[dest] == 0 || usedRegisters[src1] == 0) {
+        usedRegisters[dest] = 1;
+        usedRegisters[src1] = 1;
+        if (!is_immediate) {
+            usedRegisters[src2] = 1;  // Only mark src2 if it's a register (not immediate)
+        }
+    }
+
 	if (!is_immediate) rtype = 1;
 	int32_t val1 = registers[src1];
     int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
@@ -628,6 +646,16 @@ void mulfunc(int dest, int src1, int src2, bool is_immediate){
 
 
 void orfunc(int dest, int src1, int src2, bool is_immediate) {
+	// Mark registers as used if not already marked
+    // Note: For immediate instructions, src2 is not a register index
+    if (usedRegisters[dest] == 0 || usedRegisters[src1] == 0) {
+        usedRegisters[dest] = 1;
+        usedRegisters[src1] = 1;
+        if (!is_immediate) {
+            usedRegisters[src2] = 1;  // Only mark src2 if it's a register (not immediate)
+        }
+    }
+
 	if (!is_immediate) rtype = 1;
     int32_t val1 = registers[src1];
     int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
@@ -648,6 +676,16 @@ void orfunc(int dest, int src1, int src2, bool is_immediate) {
 
 
 void andfunc(int dest, int src1, int src2, bool is_immediate) {
+	// Mark registers as used if not already marked
+    // Note: For immediate instructions, src2 is not a register index
+    if (usedRegisters[dest] == 0 || usedRegisters[src1] == 0) {
+        usedRegisters[dest] = 1;
+        usedRegisters[src1] = 1;
+        if (!is_immediate) {
+            usedRegisters[src2] = 1;  // Only mark src2 if it's a register (not immediate)
+        }
+    }
+
 	if (!is_immediate) rtype = 1;
     int32_t val1 = registers[src1];
     int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
@@ -668,6 +706,16 @@ void andfunc(int dest, int src1, int src2, bool is_immediate) {
 
 
 void xorfunc(int dest, int src1, int src2, bool is_immediate) {
+	// Mark registers as used if not already marked
+    // Note: For immediate instructions, src2 is not a register index
+    if (usedRegisters[dest] == 0 || usedRegisters[src1] == 0) {
+        usedRegisters[dest] = 1;
+        usedRegisters[src1] = 1;
+        if (!is_immediate) {
+            usedRegisters[src2] = 1;  // Only mark src2 if it's a register (not immediate)
+        }
+    }
+
 	if (!is_immediate) rtype = 1;
     int32_t val1 = registers[src1];
     int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
