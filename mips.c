@@ -287,14 +287,16 @@ void print_registers() {
 	}
 }
 
-void printBinary(unsigned int value, int bits) {
-    for (int i = bits - 1; i >= 0; i--) {
-        printf("%c", (value & (1 << i)) ? '1' : '0');
-        if (i % 4 == 0 && i != 0) printf(" "); // Optional: space every 4 bits for readability
+// Helper to print binary of a given width, with space every 4 bits
+void printBinaryFixedWidth(unsigned int val, int width) {
+    for (int i = width - 1; i >= 0; i--) {
+        printf("%d", (val >> i) & 1);
+        // Print space every 4 bits, except after the last group
+        if (i % 4 == 0 && i != 0) {
+            printf(" ");
+        }
     }
-    printf("\n");
 }
-
 
 void print_line(decodedLine line, int index) {
     unsigned int opcode     = line.instruction;
@@ -302,25 +304,25 @@ void print_line(decodedLine line, int index) {
     unsigned int rs         = line.first_reg_val;
     unsigned int rt         = line.second_reg_val;
     unsigned int immediate  = line.immediate;
-	printf("\n---------------------------------\n");
+
+    printf("\n---------------------------------\n");
     printf("\nLine Number: [%d]\n", index);
     printf("  Raw Hex: %08X\n", line.rawHexVal);
-	printf("\nBinary: ");
-	printBinary(line.rawHexVal, 32);
-
+    
+    printf("\nBinary: ");
+    printBinaryFixedWidth(line.rawHexVal, 32);
+    printf("\n");
 
     // Print instruction name based on opcode
     printf("  Instruction: ");
     switch (opcode) {
-		// R type arithmetic print 
         case ADD:   printf("ADD (R-type)\n"); break;
         case SUB:   printf("SUB (R-type)\n"); break;
         case MUL:   printf("MUL (R-type)\n"); break;
         case OR:    printf("OR (R-type)\n"); break;
         case AND:   printf("AND (R-type)\n"); break;
         case XOR:   printf("XOR (R-type)\n"); break;
-		
-		// I type arithmetic print 
+        
         case ADDI:  printf("ADDI (I-type)\n"); break;
         case SUBI:  printf("SUBI (I-type)\n"); break;
         case MULI:  printf("MULI (I-type)\n"); break;
@@ -340,28 +342,57 @@ void print_line(decodedLine line, int index) {
         default:    printf("UNKNOWN\n"); break;
     }
 
-    printf("  Opcode:       %d\n", opcode);
+    // Print opcode
+    printf("  Opcode:       %d 	[", opcode);
+    printBinaryFixedWidth(opcode, 6);
+    printf("]\n");
 
-    // For R-type instructions, print rd, rs, rt
+    // For R-type instructions
     if (opcode == ADD || opcode == SUB || opcode == MUL || opcode == OR || opcode == AND || opcode == XOR || opcode == JR) {
-        printf("  rs:           %d\n", rs);
-        printf("  rt:           %d\n", rt);
-		printf("  rd:           %d\n", rd);
+        printf("  rs:           %d 	[", rs);
+        printBinaryFixedWidth(rs, 5);
+        printf("]\n");
+
+        printf("  rt:           %d 	[", rt);
+        printBinaryFixedWidth(rt, 5);
+        printf("]\n");
+
+        printf("  rd:           %d 	[", rd);
+        printBinaryFixedWidth(rd, 5);
+        printf("]\n");
     }
-    // For I-type instructions, print rd/rs and immediate
+    // For I-type instructions
     else if (opcode == ADDI || opcode == SUBI || opcode == MULI || opcode == ORI || opcode == ANDI || opcode == XORI ||
              opcode == LDW || opcode == STW || opcode == BZ || opcode == BEQ) {
-				rd = rs;
-        printf("  rd/rs:        %d\n", rs);   // Depending on ISA, could be dest or source register
-        printf("  rt:           %d\n", rt);
-		printf("  immediate:    %d\n", (int16_t)immediate); // sign-extended immediate
+        printf("  rd/rs:        %d 	[", rs);
+        printBinaryFixedWidth(rs, 5);
+        printf("]\n");
+
+        printf("  rt:           %d 	[", rt);
+        printBinaryFixedWidth(rt, 5);
+        printf("]\n");
+
+        printf("  immediate:    %d 	[", (int16_t)immediate);
+        printBinaryFixedWidth(immediate & 0xFFFF, 16);
+        printf("]\n");
     }
+    // For HALT or unknown
     else {
-        // For instructions like HALT or unknown, just print general info
-        printf("  rd:           %d\n", rd);
-        printf("  rs:           %d\n", rs);
-        printf("  rt:           %d\n", rt);
-        printf("  immediate:    %d\n", immediate);
+        printf("  rd:           %d 	[", rd);
+        printBinaryFixedWidth(rd, 5);
+        printf("]\n");
+
+        printf("  rs:           %d 	[", rs);
+        printBinaryFixedWidth(rs, 5);
+        printf("]\n");
+
+        printf("  rt:           %d 	[", rt);
+        printBinaryFixedWidth(rt, 5);
+        printf("]\n");
+
+        printf("  immediate:    %d 	[", immediate);
+        printBinaryFixedWidth(immediate & 0xFFFF, 16);
+        printf("]\n");
     }
 }
 
