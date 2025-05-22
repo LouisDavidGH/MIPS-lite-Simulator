@@ -655,7 +655,12 @@ void opcode_master(decodedLine line) {
 			break;
 			
 		case HALT:
-			if (mode == DEBUG) printf("HALT: ENDING PROGRAM\n\n\n\n\n");
+			if (mode == DEBUG) {
+				printf("HALT: ENDING PROGRAM\n\n\n\n\n");
+			}
+			else if (mode == DEBUG_EXTRA) {
+				print_line(line, pc);
+			}
 			haltfunc();
 			pc--;
 
