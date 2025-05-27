@@ -811,10 +811,6 @@ void orfunc(int dest, int src1, int src2, bool is_immediate) {
     int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
     registers[dest] = val1 | val2;
 
-	usedRegisters[dest] = 1;
-	usedRegisters[src1] = 1;
-	usedRegisters[src2] = 1;
-
     logic_count++;
     if (is_immediate)
         itype_count++;
