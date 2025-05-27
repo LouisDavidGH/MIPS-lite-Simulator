@@ -40,10 +40,14 @@ typedef struct decoded_line_information {
 	int pipe_stage;
 } decodedLine;
 
+
 // struct to hold pipline informatoin
-typedef struct pipeline_status_and_instruction {
-	int line_in_pipe;
-	int stage;
+typedef struct pipe_main {
+	decodedLine pipe1;
+	decodedLine pipe2;
+	decodedLine pipe3;
+	decodedLine pipe4;
+	decodedLine pipe5;
 } pipeline;
 
 // Initialize memory array - Initialize Register array
@@ -52,6 +56,10 @@ int32_t memory[MEMORY_SIZE];
 
 // Stores all of the line's information in one array
 decodedLine program_store[MEMORY_SIZE];
+
+pipeline pipe;
+
+int custom_pipeline [5][6]= {0};
 
 // Global variable to count transactions
 int rtype_count = 0;
@@ -133,8 +141,11 @@ int main(int argc, char *argv[]) {
 		// bit shift the intruction param by twenty six
 		int32_t instruction_param = rawHex>>26;
 
+		// Set instruction param
 		program_store[line_number - 1].instruction = instruction_param;
 
+		// Set pipline stage to zero
+		program_store[line_number - 1].pipe_stage = 0;
 
 		// If - instruction is register based : Else - instruction is immediate based
 		//		This block populates the instruction struct with appropriate register values and immediates based on instruction type
@@ -166,6 +177,28 @@ int main(int argc, char *argv[]) {
 			continue;
 		}
 		
+		// I need to push things trough a pipeline
+		// I need to keep track of their stage
+		// I need to compare registers to make sure there's no dependencies
+		// load up pipes, if hazard then stall, push stages through,  continue when not stalled
+
+		//loading line into pipeline
+		 if (!pipe.pipe1.pipe_stage) program_store[line_number - 1].pipe_stage += 1;
+
+
+		 if (!pipe.pipe2.pipe_stage) program_store[line_number - 2].pipe_stage += 1;
+		 if (!pipe.pipe3.pipe_stage) program_store[line_number - 3].pipe_stage += 1;
+		 if (!pipe.pipe4.pipe_stage) program_store[line_number - 4].pipe_stage += 1;
+		 if (!pipe.pipe5.pipe_stage) program_store[line_number - 5].pipe_stage += 1;
+
+
+		 //hazard comparison
+		 // if any pipe stage has a destination register within a difference of two to the line before it, halt and push
+		 // ***********************ONLY NEED TO PUSH THROUGH STAGES UNTIL WE LOAD A NEW LINE IN, RECORD TRANSACTIONS****************
+		 // This way we have a simple non-forwarded system, forwarding has other logic
+		if ((pipe.pipe2.pipe_stage - pipe.pipe1.pipe_stage <=2) && )
+
+
 		opcode_master(program_store[line_number - 1]);
 
         // DEBUG: print each binary string
@@ -210,6 +243,7 @@ int main(int argc, char *argv[]) {
 
 	return 99;
 }
+
 
 int32_t StringToHex(char *hex_string){
     uint32_t temp;

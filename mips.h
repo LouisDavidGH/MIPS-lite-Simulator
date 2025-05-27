@@ -35,6 +35,12 @@
 #define BINARY_STRING_LENGTH 32         // 32 binary characters
 #define LINE_BUFFER_SIZE 20             // line buffer for reading lines
 
+// Pipeline stages
+#define IF 1
+#define ID 2
+#define EX 3
+#define MEM 4
+#define WB 5
 
 
 #define ADD 0x00 
@@ -60,7 +66,7 @@
 
 typedef struct decoded_line_information decodedLine;
 
-typedef struct pipeline_status_and_instruction pipeline;
+typedef struct pipe_main pipeline;
 
 void opcode_master(decodedLine line);
 
