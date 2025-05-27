@@ -78,6 +78,7 @@ FILE *file;
 
 // Program Counter
 int pc = 0;
+int cycle_counter = 0;
 
 bool rtype = 0;
 bool was_control_flow = 0;
@@ -118,6 +119,8 @@ int main(int argc, char *argv[]) {
     // Read each line of the trace file
     while (fgets(line, sizeof(line), file)) {
 		line_number++;
+
+		cycle_counter++;
 		
         // Remove newlines
         line[strcspn(line, "\r\n")] = '\0';
@@ -183,20 +186,42 @@ int main(int argc, char *argv[]) {
 		// load up pipes, if hazard then stall, push stages through,  continue when not stalled
 
 		//loading line into pipeline
-		 if (!pipe.pipe1.pipe_stage) program_store[line_number - 1].pipe_stage += 1;
+		if (!pipe.pipe1.pipe_stage) program_store[line_number - 1].pipe_stage += 1;
 
 
-		 if (!pipe.pipe2.pipe_stage) program_store[line_number - 2].pipe_stage += 1;
-		 if (!pipe.pipe3.pipe_stage) program_store[line_number - 3].pipe_stage += 1;
-		 if (!pipe.pipe4.pipe_stage) program_store[line_number - 4].pipe_stage += 1;
-		 if (!pipe.pipe5.pipe_stage) program_store[line_number - 5].pipe_stage += 1;
+		if (!pipe.pipe2.pipe_stage) program_store[line_number - 2].pipe_stage += 1;
+		if (!pipe.pipe3.pipe_stage) program_store[line_number - 3].pipe_stage += 1;
+		if (!pipe.pipe4.pipe_stage) program_store[line_number - 4].pipe_stage += 1;
+		if (!pipe.pipe5.pipe_stage) program_store[line_number - 5].pipe_stage += 1;
 
 
-		 //hazard comparison
-		 // if any pipe stage has a destination register within a difference of two to the line before it, halt and push
-		 // ***********************ONLY NEED TO PUSH THROUGH STAGES UNTIL WE LOAD A NEW LINE IN, RECORD TRANSACTIONS****************
-		 // This way we have a simple non-forwarded system, forwarding has other logic
-		if ((pipe.pipe2.pipe_stage - pipe.pipe1.pipe_stage <=2) && )
+		//hazard comparison
+		// if any pipe stage has a destination register within a difference of two to the line before it, halt and push
+		// ***********************ONLY NEED TO PUSH THROUGH STAGES UNTIL WE LOAD A NEW LINE IN, RECORD TRANSACTIONS****************
+		// This way we have a simple non-forwarded system, forwarding has other logic
+		// Is this chopped because we're not allocating registers in which to store values? I think it's fine...
+
+		// while in parameters for hazard, stall. Increment cycle counters
+		while ((pipe.pipe2.pipe_stage - pipe.pipe1.pipe_stage <=2) && (pipe.pipe2.dest_register == (pipe.pipe1.first_reg_val || pipe.pipe1.second_reg_val))){
+			pipe.pipe1.pipe_stage++;
+			cycle_counter++;
+		}
+		while ((pipe.pipe3.pipe_stage - pipe.pipe2.pipe_stage <=2) && (pipe.pipe3.dest_register == (pipe.pipe2.first_reg_val || pipe.pipe2.second_reg_val))){
+			pipe.pipe2.pipe_stage++;
+			cycle_counter++;
+		}
+		while ((pipe.pipe4.pipe_stage - pipe.pipe3.pipe_stage <=2) && (pipe.pipe4.dest_register == (pipe.pipe3.first_reg_val || pipe.pipe3.second_reg_val))){
+			pipe.pipe3.pipe_stage++;
+			cycle_counter++;
+		}
+		while ((pipe.pipe5.pipe_stage - pipe.pipe4.pipe_stage <=2) && (pipe.pipe5.dest_register == (pipe.pipe4.first_reg_val || pipe.pipe4.second_reg_val))){
+			pipe.pipe4.pipe_stage++;
+			cycle_counter++;
+		}
+		while ((pipe.pipe1.pipe_stage - pipe.pipe5.pipe_stage <=2) && (pipe.pipe1.dest_register == (pipe.pipe5.first_reg_val || pipe.pipe5.second_reg_val))){
+			pipe.pipe5.pipe_stage++;
+			cycle_counter++;
+		}
 
 
 		opcode_master(program_store[line_number - 1]);
