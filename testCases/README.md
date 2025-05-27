@@ -3,10 +3,10 @@ In test1.txt
 - Tests out ADD, ADDI, SUB, and SUBI
 
 In test2.txt
-- @todo need to do MULT and MULT
+- MULT and MULT
 
 In test3.txt
-- @todo need to do logical operators
+- logical operators
 
 In test4.txt
 - @todo need to do branches and jumps
