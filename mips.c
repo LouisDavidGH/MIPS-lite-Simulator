@@ -202,23 +202,23 @@ int main(int argc, char *argv[]) {
 		// Is this chopped because we're not allocating registers in which to store values? I think it's fine...
 
 		// while in parameters for hazard, stall. Increment cycle counters
-		while ((pipe.pipe2.pipe_stage - pipe.pipe1.pipe_stage <=2) && (pipe.pipe2.dest_register == (pipe.pipe1.first_reg_val || pipe.pipe1.second_reg_val))){
+		while ((pipe.pipe1.pipe_stage - pipe.pipe2.pipe_stage <=2) && (pipe.pipe2.dest_register == (pipe.pipe1.first_reg_val || pipe.pipe1.second_reg_val))){
 			pipe.pipe1.pipe_stage++;
 			cycle_counter++;
 		}
-		while ((pipe.pipe3.pipe_stage - pipe.pipe2.pipe_stage <=2) && (pipe.pipe3.dest_register == (pipe.pipe2.first_reg_val || pipe.pipe2.second_reg_val))){
+		while ((pipe.pipe2.pipe_stage - pipe.pipe3.pipe_stage <=2) && (pipe.pipe3.dest_register == (pipe.pipe2.first_reg_val || pipe.pipe2.second_reg_val))){
 			pipe.pipe2.pipe_stage++;
 			cycle_counter++;
 		}
-		while ((pipe.pipe4.pipe_stage - pipe.pipe3.pipe_stage <=2) && (pipe.pipe4.dest_register == (pipe.pipe3.first_reg_val || pipe.pipe3.second_reg_val))){
+		while ((pipe.pipe3.pipe_stage - pipe.pipe4.pipe_stage <=2) && (pipe.pipe4.dest_register == (pipe.pipe3.first_reg_val || pipe.pipe3.second_reg_val))){
 			pipe.pipe3.pipe_stage++;
 			cycle_counter++;
 		}
-		while ((pipe.pipe5.pipe_stage - pipe.pipe4.pipe_stage <=2) && (pipe.pipe5.dest_register == (pipe.pipe4.first_reg_val || pipe.pipe4.second_reg_val))){
+		while ((pipe.pipe4.pipe_stage - pipe.pipe5.pipe_stage <=2) && (pipe.pipe5.dest_register == (pipe.pipe4.first_reg_val || pipe.pipe4.second_reg_val))){
 			pipe.pipe4.pipe_stage++;
 			cycle_counter++;
 		}
-		while ((pipe.pipe1.pipe_stage - pipe.pipe5.pipe_stage <=2) && (pipe.pipe1.dest_register == (pipe.pipe5.first_reg_val || pipe.pipe5.second_reg_val))){
+		while ((pipe.pipe5.pipe_stage - pipe.pipe1.pipe_stage <=2) && (pipe.pipe1.dest_register == (pipe.pipe5.first_reg_val || pipe.pipe5.second_reg_val))){
 			pipe.pipe5.pipe_stage++;
 			cycle_counter++;
 		}
@@ -299,6 +299,7 @@ void print_stats(){
     printf("  Logical:		%d\n", logic_count);
     printf("  Memory Access:	%d\n", memacc_count);
     printf("  Control Flow:		%d\n", cflow_count);
+	printf("  Cycles:		%d\n", cycle_counter);
 	
 	return;
 }
