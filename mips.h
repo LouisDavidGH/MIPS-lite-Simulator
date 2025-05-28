@@ -100,6 +100,7 @@ void jrfunc(int rs);
 
 void haltfunc();
 
+int32_t StringToHex(char *hex_string);
 
 
 
