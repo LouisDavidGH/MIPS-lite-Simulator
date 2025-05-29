@@ -72,7 +72,7 @@ FILE *file;
 
 // Program Counter
 int pc = 0;
-int global_clk[CLOCK_SIZE];
+int global_clk[CLOCK_SIZE]; // Currently doesn't do anything
 
 bool rtype = 0;
 bool was_control_flow = 0;
@@ -489,7 +489,7 @@ void print_line(decodedLine line, int index) {
         printf("  immediate:    %d 	[", (int16_t)imm);
         printBinaryFixedWidth(imm & 0xFFFF, 16);
         printf("]\n");
-		printf("  Operands : rt = R[%d], rs = R[%d], imm = %d\n", rt, rs, imm);
+		printf("  Operands : rt = R[%d], rs = R[%d], imm = %d\n", rt, rs, (int16_t)imm);
     }
     // For HALT or unknown
     else {
@@ -505,7 +505,7 @@ void print_line(decodedLine line, int index) {
         printBinaryFixedWidth(rt, 5);
         printf("]\n");
 
-        printf("  immediate:    %d 	[", imm);
+        printf("  immediate:    %d 	[", (int16_t)imm);
         printBinaryFixedWidth(imm & 0xFFFF, 16);
         printf("]\n");
 		printf("  Operands : rd = R[%d], rs = R[%d], rt = R[%d]\n", rd, rs, rt);
