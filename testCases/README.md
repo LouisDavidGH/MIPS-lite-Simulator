@@ -1,4 +1,4 @@
-## 📄 test1.txt Instruction Breakdown
+## 📄 test.txt Instruction Breakdown
 In test1.txt
 - Tests out ADD, ADDI, SUB, and SUBI
 

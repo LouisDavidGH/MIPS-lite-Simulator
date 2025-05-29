@@ -326,7 +326,12 @@ void print_line(decodedLine line, int index) {
     unsigned int imm  		= line.immediate;
 
     printf("\n---------------------------------\n");
-    printf("\nLine Number: [%d]\n", index);
+	if (opcode == BZ || opcode == BEQ || opcode == JR) {
+    	printf("\nLine Number: [%d]\n", index - imm + 1);
+	}
+	else {
+		printf("\nLine Number: [%d]\n", index);
+	}
     printf("  Raw Hex: %08X\n", line.rawHexVal);
     
     printf("\nBinary: ");
