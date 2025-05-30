@@ -57,9 +57,8 @@ int32_t memory[MEMORY_SIZE];
 // Stores all of the line's information in one array
 decodedLine program_store[MEMORY_SIZE];
 
+// Variable for our pipe struct
 pipeline pipe;
-
-int custom_pipeline [5][6]= {0};
 
 // Global variable to count transactions
 int rtype_count = 0;
@@ -120,7 +119,7 @@ int main(int argc, char *argv[]) {
     while (fgets(line, sizeof(line), file)) {
 		line_number++;
 
-		cycle_counter++;
+		//cycle_counter++;
 		
         // Remove newlines
         line[strcspn(line, "\r\n")] = '\0';
@@ -185,16 +184,6 @@ int main(int argc, char *argv[]) {
 		// I need to compare registers to make sure there's no dependencies
 		// load up pipes, if hazard then stall, push stages through,  continue when not stalled
 
-		//loading line into pipeline
-		if (!pipe.pipe1.pipe_stage) program_store[line_number - 1].pipe_stage += 1;
-
-
-		if (!pipe.pipe2.pipe_stage) program_store[line_number - 2].pipe_stage += 1;
-		if (!pipe.pipe3.pipe_stage) program_store[line_number - 3].pipe_stage += 1;
-		if (!pipe.pipe4.pipe_stage) program_store[line_number - 4].pipe_stage += 1;
-		if (!pipe.pipe5.pipe_stage) program_store[line_number - 5].pipe_stage += 1;
-
-
 		//hazard comparison
 		// if any pipe stage has a destination register within a difference of two to the line before it, halt and push
 		// ***********************ONLY NEED TO PUSH THROUGH STAGES UNTIL WE LOAD A NEW LINE IN, RECORD TRANSACTIONS****************
@@ -202,27 +191,92 @@ int main(int argc, char *argv[]) {
 		// Is this chopped because we're not allocating registers in which to store values? I think it's fine...
 
 		// while in parameters for hazard, stall. Increment cycle counters
-		while ((pipe.pipe1.pipe_stage - pipe.pipe2.pipe_stage <=2) && (pipe.pipe2.dest_register == (pipe.pipe1.first_reg_val || pipe.pipe1.second_reg_val))){
+
+		// Algorithm---------------
+		// load a line into a pipe
+		// check for register overlap
+		// if so, clock through until the overlap is gone
+		// if no, clock through
+
+		// Pushing a stage through if the pipe are loaded
+		if (0 < pipe.pipe1.pipe_stage && pipe.pipe1.pipe_stage < NUMPIPES) {
 			pipe.pipe1.pipe_stage++;
-			cycle_counter++;
-		}
-		while ((pipe.pipe2.pipe_stage - pipe.pipe3.pipe_stage <=2) && (pipe.pipe3.dest_register == (pipe.pipe2.first_reg_val || pipe.pipe2.second_reg_val))){
+		} else pipe.pipe1.pipe_stage = 0; // if a stage zero then no change anyway. If it's five, it gets reset and loaded in the next stage
+
+		if (0 < pipe.pipe2.pipe_stage && pipe.pipe2.pipe_stage < NUMPIPES) {
 			pipe.pipe2.pipe_stage++;
-			cycle_counter++;
-		}
-		while ((pipe.pipe3.pipe_stage - pipe.pipe4.pipe_stage <=2) && (pipe.pipe4.dest_register == (pipe.pipe3.first_reg_val || pipe.pipe3.second_reg_val))){
+		} else pipe.pipe2.pipe_stage = 0;
+
+		if (0 < pipe.pipe3.pipe_stage && pipe.pipe3.pipe_stage < NUMPIPES) {
 			pipe.pipe3.pipe_stage++;
-			cycle_counter++;
-		}
-		while ((pipe.pipe4.pipe_stage - pipe.pipe5.pipe_stage <=2) && (pipe.pipe5.dest_register == (pipe.pipe4.first_reg_val || pipe.pipe4.second_reg_val))){
+		} else pipe.pipe3.pipe_stage = 0;
+
+		if (0 < pipe.pipe4.pipe_stage && pipe.pipe4.pipe_stage < NUMPIPES) {
 			pipe.pipe4.pipe_stage++;
-			cycle_counter++;
-		}
-		while ((pipe.pipe5.pipe_stage - pipe.pipe1.pipe_stage <=2) && (pipe.pipe1.dest_register == (pipe.pipe5.first_reg_val || pipe.pipe5.second_reg_val))){
+		} else pipe.pipe4.pipe_stage = 0;
+
+		if (0 < pipe.pipe5.pipe_stage && pipe.pipe5.pipe_stage < NUMPIPES) {
 			pipe.pipe5.pipe_stage++;
-			cycle_counter++;
+		} else pipe.pipe5.pipe_stage = 0;
+
+
+
+		// if a pipe is empty, exlusively load it with the current line
+		if (!pipe.pipe1.pipe_stage) {
+			pipe.pipe1 = program_store[line_number - 1];
+			pipe.pipe1.pipe_stage++;
+		} 
+		else if (!pipe.pipe2.pipe_stage) {
+			pipe.pipe2 = program_store[line_number - 1];
+			pipe.pipe2.pipe_stage++;
+		} 
+		else if (!pipe.pipe3.pipe_stage){
+			pipe.pipe3 = program_store[line_number - 1];
+			pipe.pipe3.pipe_stage++;
+		} 
+		else if (!pipe.pipe4.pipe_stage){
+			pipe.pipe4 = program_store[line_number - 1];
+			pipe.pipe4.pipe_stage++;
+		} 
+		else if (!pipe.pipe5.pipe_stage){
+			pipe.pipe5 = program_store[line_number - 1];
+			pipe.pipe5.pipe_stage++;
+		} 
+
+		// Load pipe values into an array. Notice the array is in order of pipes 1 through 5
+		int rd[NUMPIPES] = {pipe.pipe1.dest_register, pipe.pipe2.dest_register, pipe.pipe3.dest_register, pipe.pipe4.dest_register, pipe.pipe5.dest_register};
+		int rs[NUMPIPES] = {pipe.pipe1.first_reg_val, pipe.pipe2.first_reg_val, pipe.pipe3.first_reg_val, pipe.pipe4.first_reg_val, pipe.pipe5.first_reg_val};
+		int rt[NUMPIPES] = {pipe.pipe1.second_reg_val, pipe.pipe2.second_reg_val, pipe.pipe3.second_reg_val, pipe.pipe4.second_reg_val, pipe.pipe5.second_reg_val};
+
+		// Cycle through each destination register, check if a there is a hazard. Does this account for the 5-1 case of pipelinig? or 5-2 where a line in 2 needs data in 5? Non-forwarding
+		int stall_cycles;
+		int pipe_that_needs_pushing;
+		for (int i = 0; i < NUMPIPES; i++) {
+			for (int j = 0; j < NUMPIPES; j++) {
+				if (DEST_NEEDS_SOURCE ) {
+					// hazard
+					// mark and clock through the pipe in particular
+					stall_cycles  = i - j;
+					pipe_that_needs_pushing = j;
+				}
+			}
+			
 		}
 
+		//if ()
+
+		cycle_counter++;
+
+
+		if (mode == DEBUG) {
+				printf("***************PIPE CYCLE DEBUG**************\n\n");
+				printf("Pipe 1: %d\n", pipe.pipe1.pipe_stage);
+				printf("Pipe 2: %d\n", pipe.pipe2.pipe_stage);
+				printf("Pipe 3: %d\n", pipe.pipe3.pipe_stage);
+				printf("Pipe 4: %d\n", pipe.pipe4.pipe_stage);
+				printf("Pipe 5: %d\n", pipe.pipe5.pipe_stage);
+				printf("*********************************\n");
+		}
 
 		opcode_master(program_store[line_number - 1]);
 

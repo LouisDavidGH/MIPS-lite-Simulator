@@ -41,6 +41,10 @@
 #define EX 3
 #define MEM 4
 #define WB 5
+#define NUMPIPES 5
+
+#define DEST_NEEDS_SOURCE (rd[i] == (rs[j] || rt[j]))
+#define DEST_AFTER_SOURCE (i > j)
 
 
 #define ADD 0x00 
