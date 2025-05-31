@@ -206,14 +206,14 @@ int main(int argc, char *argv[]) {
 		bool hazard = false;
 
 
-
+		bool newInstAdded = false;
 
 
 		// memory access instructions
 		if (inID && inMEM && findHazard(inMEM, inID)) {
 			hazard = true;
 			cycle_counter++;
-			bool newInstAdded = false;
+			
 			
 			if (mode == DEBUG) 
 				printf("\n\n\n\nStall at cycle %d: MEM-ID hazard detected\n\n\n\n", cycle_counter);
@@ -234,11 +234,11 @@ int main(int argc, char *argv[]) {
 					
 					*slots[i] = empty;
 				}
-				/*if ((slots[i]->pipe_stage == 0) && !newInstAdded) {
+				if ((slots[i]->pipe_stage == 0) && !newInstAdded) {
 					newinst.pipe_stage = 1;
 					*slots[i] = newinst;
 					newInstAdded = true;
-				}*/
+				}
             }
 			
 			// DEBUG: pipe cycle debug
@@ -273,7 +273,6 @@ int main(int argc, char *argv[]) {
 		if (inID && inEX && findHazard(inEX, inID)) {
 			hazard = true;
 			cycle_counter++;
-			bool newInstAdded = false;
 			
 			if (mode == DEBUG) 
 				printf("\n\n\n\nStall at cycle %d: EX-ID hazard detected\n\n\n\n", cycle_counter);
@@ -294,12 +293,12 @@ int main(int argc, char *argv[]) {
 					
 					*slots[i] = empty;
 				}
-				/*
+				
 				if ((slots[i]->pipe_stage == 0) && !newInstAdded) {
 					newinst.pipe_stage = 1;
 					*slots[i] = newinst;
 					newInstAdded = true;
-				}*/
+				}
             }
 			
 			// DEBUG: pipe cycle debug
@@ -333,7 +332,6 @@ int main(int argc, char *argv[]) {
 
 		if (!hazard) {
 			cycle_counter++;
-			bool newInstAdded = false;
 			
             for (int i = 0; i < 5; i++) {
                 if (slots[i]->pipe_stage > 0 && slots[i]->pipe_stage < 5) {
