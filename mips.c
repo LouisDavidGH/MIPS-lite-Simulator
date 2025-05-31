@@ -110,10 +110,17 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 	
+<<<<<<< Updated upstream
     
 	if (mode == DEBUG_EXTRA) {
 		printf("-- Going through testcase lines --\n");
 	}
+=======
+    // initialize pipeline slots empty
+    decodedLine empty = {.instruction=NOP, .dest_register=-1, .first_reg_val=-1, .second_reg_val=-1, .immediate=0, .pipe_stage=0};
+    pipe.pipe1 = empty; pipe.pipe2=empty; pipe.pipe3=empty; pipe.pipe4=empty; pipe.pipe5=empty;
+    
+>>>>>>> Stashed changes
     // Read each line of the trace file
     while (fgets(line, sizeof(line), file)) {
 		line_number++;
@@ -157,11 +164,19 @@ int main(int argc, char *argv[]) {
 		*/
 
 		// bit shift the intruction param by twenty six
+<<<<<<< Updated upstream
 		int32_t instruction_param = rawHex>>26;
 		maxline = line_number - 1;
 		program_store[line_number - 1].instruction = instruction_param;
+=======
+		int32_t opcode = rawHex>>26;
+
+		// Set instruction param
+		program_store[line_number - 1].instruction = opcode;
+>>>>>>> Stashed changes
 
 
+<<<<<<< Updated upstream
 		// If - instruction is register based : Else - instruction is immediate based
 		//		This block populates the instruction struct with appropriate register values and immediates based on instruction type
 		if (instruction_param <= 0xB && instruction_param % 2 == 0){
@@ -190,6 +205,41 @@ int main(int argc, char *argv[]) {
             printf("Line %d\n", line_number);
             printf("%d does not map to a valid instruction\n\n", program_store[line_number - 1].instruction);
         }
+=======
+		decodedLine newinst = empty;
+        newinst.instruction = opcode;
+
+        int rs = (rawHex >> 21) & 0x1F;
+        int rt = (rawHex >> 16) & 0x1F;
+        int rd = (rawHex >> 11) & 0x1F;
+
+        if (opcode % 2 == 0 && opcode <= 0x0A) {
+            // R-type
+            newinst.dest_register = rd;
+            newinst.first_reg_val = rs;
+            newinst.second_reg_val = rt;
+			program_store[line_number - 1].dest_register = rd;
+			program_store[line_number - 1].first_reg_val = rs;
+			program_store[line_number - 1].second_reg_val = rt;
+        } 
+		
+		else if (opcode <= 0x10){
+            // I-type
+            newinst.dest_register = rt;
+            newinst.first_reg_val = rs;
+            newinst.immediate = rawHex & 0xFFFF;
+			program_store[line_number - 1].dest_register = rt;
+			program_store[line_number - 1].first_reg_val = rs;
+			program_store[line_number - 1].immediate = rawHex & 0xFFFF;
+        }
+		
+		else {
+			if (mode == DEBUG) {
+				printf("Line %d\n", line_number);
+				//  printf("Binary: %u\n", program_store[line_number - 1]);
+				printf("%d does not map to a valid instruction\n\n", program_store[line_number - 1].instruction);
+			}
+>>>>>>> Stashed changes
 			continue;
 		}
 		// if (mode == DEBUG_EXTRA) {
@@ -205,6 +255,7 @@ int main(int argc, char *argv[]) {
 	// THIS SECTION IS THE PROGRAM COUNTER KEEPING TRACK OF EACH INSTRUCTION UNTIL HALTED
 	while(Running) {
 		
+<<<<<<< Updated upstream
 		if (pc == maxline + 1) {
 			printf("Error not valid area\n");
 			break;
@@ -212,11 +263,163 @@ int main(int argc, char *argv[]) {
 		// print_line(program_store[pc], pc);
 		// bit shift the intruction param by twenty six
 		int32_t instruction_param = program_store[pc].rawHexVal>>26;
+=======
+
+
+
+
+
+
+
+		decodedLine *slots[5] = {&pipe.pipe1, &pipe.pipe2, &pipe.pipe3, &pipe.pipe4, &pipe.pipe5};
+        decodedLine *inID = NULL, *inEX = NULL, *inMEM = NULL;
+        for (int i = 0; i < 5; i++) {
+            if (slots[i]->pipe_stage == 2) inID = slots[i];
+            if (slots[i]->pipe_stage == 3) inEX = slots[i];
+            if (slots[i]->pipe_stage == 4) inMEM = slots[i];
+        }
+
+		bool hazard = false;
+
+
+
+
+
+		// memory access instructions
+		if (inID && inMEM && findHazard(inMEM, inID)) {
+			hazard = true;
+			cycle_counter++;
+			bool newInstAdded = false;
+			
+			if (mode == DEBUG) 
+				printf("\n\n\n\nStall at cycle %d: EX-ID hazard detected\n\n\n\n", cycle_counter);
+
+            for (int i = 0; i < 5; i++) {
+                if (slots[i]->pipe_stage > 2 && slots[i]->pipe_stage < 5) {
+					if (slots[i]->pipe_stage == 3) {
+						if (!opcode_master(*slots[i]))
+							pc++;
+					}
+                    slots[i]->pipe_stage++;
+                }
+				else if (slots[i]->pipe_stage == 5){
+					printf("\n\nWriting back data from pipe %d\n\n", i+1);
+					*slots[i] = empty;
+				}
+				if ((slots[i]->pipe_stage == 0) && !newInstAdded) {
+					newinst.pipe_stage = 1;
+					*slots[i] = newinst;
+					newInstAdded = true;
+				}
+            }
+		}
+
+
+
+
+		if (inID && inEX && findHazard(inEX, inID)) {
+			hazard = true;
+			cycle_counter++;
+			bool newInstAdded = false;
+			
+			if (mode == DEBUG) 
+				printf("\n\n\n\nStall at cycle %d: EX-ID hazard detected\n\n\n\n", cycle_counter);
+
+            for (int i = 0; i < 5; i++) {
+                if (slots[i]->pipe_stage > 2 && slots[i]->pipe_stage < 5) {
+					if (slots[i]->pipe_stage == 3) {
+						if (!opcode_master(*slots[i]))
+							pc++;
+					}
+                    slots[i]->pipe_stage++;
+                }
+				else if (slots[i]->pipe_stage == 5){
+					printf("\n\nWriting back data from pipe %d\n\n", i+1);
+					*slots[i] = empty;
+				}
+				if ((slots[i]->pipe_stage == 0) && !newInstAdded) {
+					newinst.pipe_stage = 1;
+					*slots[i] = newinst;
+					newInstAdded = true;
+				}
+            }
+		}
+
+
+
+
+		if (!hazard) {
+			cycle_counter++;
+			bool newInstAdded = false;
+			
+            for (int i = 0; i < 5; i++) {
+                if (slots[i]->pipe_stage > 0 && slots[i]->pipe_stage < 5) {
+					if (slots[i]->pipe_stage == 3) {
+						if (!opcode_master(*slots[i]))
+							pc++;
+					}
+                    slots[i]->pipe_stage++;
+                }
+				else if (slots[i]->pipe_stage == 5){
+					printf("\n\nWriting back data from pipe %d\n\n", i+1);
+					*slots[i] = empty;
+				}
+				
+				if ((slots[i]->pipe_stage == 0) && !newInstAdded) {
+					newinst.pipe_stage = 1;
+					*slots[i] = newinst;
+					newInstAdded = true;
+				}
+			}	
+		}
+
+
+
+		
+		
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		
+
+		// DEBUG: pipe cycle debug
+		if (mode == DEBUG) {
+				printf("***************PIPE CYCLE DEBUG**************\n\n");
+				printf("Pipe 1: %d\n", slots[0]->pipe_stage);
+				printf("Pipe 2: %d\n", slots[1]->pipe_stage);
+				printf("Pipe 3: %d\n", slots[2]->pipe_stage);
+				printf("Pipe 4: %d\n", slots[3]->pipe_stage);
+				printf("Pipe 5: %d\n", slots[4]->pipe_stage);
+				printf("*********************************\n");
+		}
+
+		// opcode_master(program_store[line_number - 1]);
+>>>>>>> Stashed changes
 
         // DEBUG: print each binary string
         if (mode == DEBUG) {
             printf("---Line %d---\n", pc);
            //  printf("Binary: %u\n", program_store[line_number - 1]);
+<<<<<<< Updated upstream
             printf("Hex Number: %X\n", program_store[pc].rawHexVal);
 			printf("Instruction: 0x%X, %d\n", program_store[pc].instruction, program_store[pc].instruction);
 			printf("Destination register: %d\n", program_store[pc].dest_register);
@@ -232,29 +435,27 @@ int main(int argc, char *argv[]) {
 		}
 		
 	}
-
-	/*
-
-	AGREED_METHOD
-		PRE-DECODE
-			Store info using line structs
-
-		Have a master clock
-			Cycles push thing through the pipiline and advance the program
-
-		Pipes
-			Pipes are struct that keep what instruction/line they're on and the stage
+=======
+            printf("Hex Number: %X\n", rawHex);
+			printf("Instruction: 0x%X, %d\n", program_store[line_number - 1].instruction, program_store[line_number - 1].instruction);
+			printf("Destination register: %d\n", program_store[line_number - 1].dest_register);
+			printf("1st source register: %d\n", program_store[line_number - 1].first_reg_val);
+			if (opcode <= 0xB && opcode % 2 == 0) printf ("2nd source register: %d\n\n", program_store[line_number - 1].second_reg_val);
+			else printf("Immediate value: %d\n\n", program_store[line_number - 1].immediate);
+        }
 		
+    }
+>>>>>>> Stashed changes
 
-	*/
+
+
+
 
 	
 	if(mode == DEBUG)
 		printf("No HALT instruction found- ending program");
 	
-	
 	end_program();
-
 
 	return 99;
 }
@@ -262,6 +463,36 @@ int main(int argc, char *argv[]) {
 //////////////////////////
 // END OF MAIN
 //////////////////////////
+
+
+
+
+
+
+
+// detect RAW hazard between two stages
+bool findHazard(const decodedLine *wr, const decodedLine *rd) {
+    // Both stages must hold an instruction
+    if (wr->pipe_stage == 0 || rd->pipe_stage == 0) 
+		return false;
+	
+    // Ignore NOP slots
+    if (wr->instruction == NOP || rd->instruction == NOP) 
+		return false;
+	
+    if (wr->dest_register < 0) 
+		return false;
+	
+    // Check first source register
+    if (wr->dest_register == rd->first_reg_val) 
+		return true;
+	
+    // Only R-type opcodes (even, <=0x0A) have a second source
+    if ((rd->instruction % 2 == 0 && rd->instruction <= 0x0A) && wr->dest_register == rd->second_reg_val)
+        return true;
+	
+    return false;
+}
 
 int32_t StringToHex(char *hex_string){
     uint32_t temp;
@@ -276,12 +507,14 @@ int32_t StringToHex(char *hex_string){
 	return signedInt;
 }
 
+
 void end_program(){
 	// Close the file
     fclose(file);
 	print_stats();
 	exit(EXIT_SUCCESS);
 }
+
 
 void print_stats(){
 	printf("---------------------------------");
@@ -517,7 +750,7 @@ void print_line(decodedLine line, int index) {
     }
 }
 
-void opcode_master(decodedLine line) {
+bool opcode_master(decodedLine line) {
 
     unsigned int opcode 	= line.instruction;
 	unsigned int rd 		= line.dest_register;
@@ -700,8 +933,10 @@ void opcode_master(decodedLine line) {
 	}
 	// Unless control flow instruction modified pc directly, increment by default
 	if (was_control_flow == 0)
-		pc++;
+		return false;
 	
+	else
+		return true;
 }
 
 // addfunc(rt, rs, immediate, true);
@@ -923,6 +1158,7 @@ void bzfunc(int rs, int imm) {
 		usedRegisters[rs] = 1;
     }
 }
+
 
 void beqfunc(int rs, int rt, int imm) {
     cflow_count++;

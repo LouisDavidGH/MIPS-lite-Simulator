@@ -36,6 +36,7 @@
 #define BINARY_STRING_LENGTH 32         // 32 binary characters
 #define LINE_BUFFER_SIZE 20             // line buffer for reading lines
 
+<<<<<<< Updated upstream
 // Commands
 #define ADD 0x00  // Opcode: 000000 
 #define ADDI 0x01 // Opcode: 000001
@@ -55,6 +56,42 @@
 #define BEQ 0x0F  // Opcode: 001111
 #define JR 0x10   // Opcode: 010000
 #define HALT 0x11 // Opcode: 010001
+=======
+// Pipeline stages
+#define IF 1
+#define ID 2
+#define EX 3
+#define MEM 4
+#define WB 5
+#define NUMPIPES 5
+
+#define DEST_NEEDS_SOURCE (rd[i] == (rs[j] || rt[j]))
+#define DEST_AFTER_SOURCE (i > j)
+
+
+#define ADD 0x00 
+#define ADDI 0x01 
+#define SUB 0x02
+#define SUBI 0x03
+#define MUL 0x04
+#define MULI 0x05
+#define OR 0x06
+#define ORI 0x07
+#define AND 0x08
+#define ANDI 0x09
+#define XOR 0x0A
+#define XORI 0x0B
+#define LDW 0x0C
+#define STW 0x0D
+#define BZ 0x0E
+#define BEQ 0x0F
+#define JR 0x10
+#define HALT 0x11
+
+#define NOP 0xFF
+
+
+>>>>>>> Stashed changes
 
 // Forward declaration of a struct named decoded_line_information,
 // and creating an alias 'decodedLine' for easier use.
@@ -64,11 +101,18 @@ typedef struct decoded_line_information decodedLine;
 // and creating an alias 'pipeline' for easier use.
 typedef struct pipeline_status_and_instruction pipeline;
 
+<<<<<<< Updated upstream
 // Function prototype for handling instructions based on opcode.
 // Takes a decodedLine struct representing the decoded instruction.
 void opcode_master(decodedLine line);
 
 // Function prototype to print program or pipeline statistics.
+=======
+bool opcode_master(decodedLine line);
+
+bool findHazard(const decodedLine *wr, const decodedLine *rd);
+
+>>>>>>> Stashed changes
 void print_stats();
 
 // Function prototype to end the program execution, possibly cleanup.
