@@ -152,13 +152,16 @@ int main(int argc, char *argv[]) {
 		// Set pipline stage to zero
 		program_store[line_number - 1].pipe_stage = 0;
 
+		// Most recent line struct to iterate on
 		decodedLine newinst = empty;
         newinst.instruction = opcode;
 
+		// Getting registers by bit shifting and masking
         int rs = (rawHex >> 21) & 0x1F;
         int rt = (rawHex >> 16) & 0x1F;
         int rd = (rawHex >> 11) & 0x1F;
 
+		// Loading in R-type instruction values
         if (opcode % 2 == 0 && opcode <= 0x0A) {
             // R-type
             newinst.dest_register = rd;
@@ -169,6 +172,7 @@ int main(int argc, char *argv[]) {
 			program_store[line_number - 1].second_reg_val = rt;
         } 
 		
+		// Loading in I-type instruction values
 		else if (opcode <= 0x11){
             // I-type
             newinst.dest_register = rt;
@@ -179,6 +183,7 @@ int main(int argc, char *argv[]) {
 			program_store[line_number - 1].immediate = rawHex & 0xFFFF;
         }
 		
+		//DEBUG
 		else {
 			if (mode == DEBUG) {
 				printf("Line %d\n", line_number);
@@ -188,36 +193,32 @@ int main(int argc, char *argv[]) {
 			continue;
 		}
 		
-
-
-
-
-
-
-
+		// Array of decodedLines which serves as pipes
 		decodedLine *slots[5] = {&pipe.pipe1, &pipe.pipe2, &pipe.pipe3, &pipe.pipe4, &pipe.pipe5};
+
+		// 3 decodedLine variables to hold the line that is in a particular stage
         decodedLine *inID = NULL, *inEX = NULL, *inMEM = NULL;
+
+		// Mark which line is in a particular stage
         for (int i = 0; i < 5; i++) {
             if (slots[i]->pipe_stage == 2) inID = slots[i];
             if (slots[i]->pipe_stage == 3) inEX = slots[i];
             if (slots[i]->pipe_stage == 4) inMEM = slots[i];
         }
 
+		// Hazard and newline loaded variables
 		bool hazard = false;
-
-
 		bool newInstAdded = false;
 
-
-		// memory access instructions
+		// memory access instructions - MEM-ID hazard handling
 		if (inID && inMEM && findHazard(inMEM, inID)) {
 			hazard = true;
 			cycle_counter++;
 			
+			// DEBUG
+			if (mode == DEBUG) printf("\n\n\n\nStall at cycle %d: MEM-ID hazard detected\n\n\n\n", cycle_counter);
 			
-			if (mode == DEBUG) 
-				printf("\n\n\n\nStall at cycle %d: MEM-ID hazard detected\n\n\n\n", cycle_counter);
-
+			// Iterate through pipes and stall as appropriate
             for (int i = 0; i < 5; i++) {
                 if (slots[i]->pipe_stage > 2 && slots[i]->pipe_stage < 5) {
 					if (slots[i]->pipe_stage == 3) {
@@ -226,6 +227,7 @@ int main(int argc, char *argv[]) {
 					}
                     slots[i]->pipe_stage++;
                 }
+				// Write-back logic once a line is pushed through its respective pipe
 				else if (slots[i]->pipe_stage == 5){
 					printf("\n\nWriting back data from pipe %d\n\n", i+1);
 					if (halt_executed && (slots[i]->instruction == HALT)){
@@ -234,6 +236,7 @@ int main(int argc, char *argv[]) {
 					
 					*slots[i] = empty;
 				}
+				// Load a new instruction in the pipe
 				if ((slots[i]->pipe_stage == 0) && !newInstAdded) {
 					newinst.pipe_stage = 1;
 					*slots[i] = newinst;
@@ -269,14 +272,15 @@ int main(int argc, char *argv[]) {
 
 
 
-
+		// ID-EX hazard handling
 		if (inID && inEX && findHazard(inEX, inID)) {
 			hazard = true;
 			cycle_counter++;
 			
-			if (mode == DEBUG) 
-				printf("\n\n\n\nStall at cycle %d: EX-ID hazard detected\n\n\n\n", cycle_counter);
+			// DEBUG
+			if (mode == DEBUG) printf("\n\n\n\nStall at cycle %d: EX-ID hazard detected\n\n\n\n", cycle_counter);
 
+			// Iterate through pipes and stall as appropriate
             for (int i = 0; i < 5; i++) {
                 if (slots[i]->pipe_stage > 2 && slots[i]->pipe_stage < 5) {
 					if (slots[i]->pipe_stage == 3) {
@@ -285,6 +289,7 @@ int main(int argc, char *argv[]) {
 					}
                     slots[i]->pipe_stage++;
                 }
+				// Write-back logic once a line is pushed through its respective pipe
 				else if (slots[i]->pipe_stage == 5){
 					printf("\n\nWriting back data from pipe %d\n\n", i+1);
 					if (halt_executed && (slots[i]->instruction == HALT)){
@@ -293,7 +298,7 @@ int main(int argc, char *argv[]) {
 					
 					*slots[i] = empty;
 				}
-				
+				// Load a new instruction in the pipe
 				if ((slots[i]->pipe_stage == 0) && !newInstAdded) {
 					newinst.pipe_stage = 1;
 					*slots[i] = newinst;
@@ -327,12 +332,11 @@ int main(int argc, char *argv[]) {
 			}
 		}
 
-
-
-
+		// No-hazard case
 		if (!hazard) {
 			cycle_counter++;
 			
+			// Execute on each instruction once they're in the EX stage
             for (int i = 0; i < 5; i++) {
                 if (slots[i]->pipe_stage > 0 && slots[i]->pipe_stage < 5) {
 					if (slots[i]->pipe_stage == 3) {
@@ -341,6 +345,7 @@ int main(int argc, char *argv[]) {
 					}
 					slots[i]->pipe_stage++;
                 }
+				// Print Write-backs
 				else if (slots[i]->pipe_stage == 5){
 					printf("\n\nWriting back data from pipe %d\n\n", i+1);
 					if (halt_executed && (slots[i]->instruction == HALT)){
@@ -349,7 +354,7 @@ int main(int argc, char *argv[]) {
 					
 					*slots[i] = empty;
 				}
-				
+				// Load new line into the pipe
 				if ((slots[i]->pipe_stage == 0) && !newInstAdded) {
 					newinst.pipe_stage = 1;
 					*slots[i] = newinst;
