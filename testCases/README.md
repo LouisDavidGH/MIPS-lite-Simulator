@@ -9,7 +9,7 @@ In test3.txt
 - logical operators
 
 In test4.txt
-- @todo need to do branches and jumps
+- branches
 
 In test5.txt
-- @todo need to do a combination of instructions
+- @todo jump register, store, load

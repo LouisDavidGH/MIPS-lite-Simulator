@@ -50,6 +50,7 @@ typedef struct pipeline_status_and_instruction {
 // Initialize memory array - Initialize Register array
 int32_t registers[NUM_REGISTERS] = {0};
 int usedRegisters[NUM_REGISTERS] = {0}; // Flag for register if used
+int usedMemory[MEMORY_SIZE] = {0}; // Flag for register if used
 int32_t memory[MEMORY_SIZE];
 
 // Stores all of the line's information in one array
@@ -195,10 +196,6 @@ int main(int argc, char *argv[]) {
         }
 			continue;
 		}
-		// if (mode == DEBUG_EXTRA) {
-		// 	print_line(program_store[line_number - 1], line_number - 1);
-		// }
-
     }
 
 	if (mode == DEBUG_EXTRA) {
@@ -212,7 +209,6 @@ int main(int argc, char *argv[]) {
 			printf("Error not valid area\n");
 			break;
 		}
-		// print_line(program_store[pc], pc);
 		// bit shift the intruction param by twenty six
 		int32_t instruction_param = program_store[pc].rawHexVal>>26;
 
@@ -230,7 +226,9 @@ int main(int argc, char *argv[]) {
 
 		// Using the program counter to go through the list.
 		opcode_master(program_store[pc]);
+		
 		if (program_store[pc].instruction == HALT) {
+			opcode_master(program_store[pc]);
 			break;
 		}
 		
@@ -298,6 +296,7 @@ void print_stats(){
     printf("  Control Transfer Instructions:	%d\n", cflow_count);
 	printf("  Program Counter   			%d\n", pc);
 	print_registers();
+	print_mem();
 	return;
 }
 
@@ -306,6 +305,15 @@ void print_registers() {
 	for (int i = 0; i < NUM_REGISTERS; i++) {
 		if (usedRegisters[i] == 1) {
 			printf("R%d: %d\n", i, registers[i]);
+		}
+	}
+}
+
+void print_mem(){
+	printf("\n");
+	for (int i = 0; i < MEMORY_SIZE; i++) {
+		if (usedMemory[i] == 1) {
+			printf("Address %d, Contents: %d\n", i, memory[i]);
 		}
 	}
 }
@@ -668,15 +676,13 @@ void opcode_master(decodedLine line) {
 			break;
 			
 		case HALT:
-			if (mode == DEBUG || mode == DEBUG_EXTRA) {
+			if (mode == DEBUG) {
 				printf("HALT: ENDING PROGRAM\n\n\n\n\n");
 			}
 			else if (mode == DEBUG_EXTRA) {
 				print_line(line, pc);
 			}
 			haltfunc();
-			pc--;
-
 			break;
 		}
 	
@@ -705,6 +711,8 @@ void opcode_master(decodedLine line) {
 			print_line(line, pc);
 			printf("\n -- Registers Used -- :");
 			print_registers();
+			printf("\n -- Memory State Used -- :");
+			print_mem();
 	}
 	// Unless control flow instruction modified pc directly, increment by default
 	if (was_control_flow == 0) {
@@ -919,6 +927,7 @@ void stwfunc(int rt, int rs, int imm) {
 
     memory[addr / 4] = registers[rt];
 	usedRegisters[rt] = 1;
+	usedMemory[addr / 4] = 1;
 
     memacc_count++;
     itype_count++;
