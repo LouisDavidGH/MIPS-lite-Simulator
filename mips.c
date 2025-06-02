@@ -64,6 +64,7 @@ int memacc_count = 0;
 int cflow_count = 0;
 int total_inst_count = 0;
 int maxline = 0;
+
 // Program run more
 int mode;
 
@@ -73,6 +74,8 @@ FILE *file;
 // Program Counter
 int pc = 0;
 int global_clk[CLOCK_SIZE]; // Currently doesn't do anything
+
+bool branchedFlag = false;
 
 bool rtype = 0;
 bool was_control_flow = 0;
@@ -175,7 +178,7 @@ int main(int argc, char *argv[]) {
 			program_store[line_number - 1].rawHexVal = rawHex;
 		}
 		// Note - Even if some instructions don't use all the register/immediate values, they are still populated here
-		else if ( instruction_param <= 0x11){
+		else if ((instruction_param <= 0x11 && instruction_param > 0xB) || (instruction_param <= 0xB && instruction_param % 2 != 0)){
 			int32_t first_reg = (rawHex << 6) >> 27;					// rs
 			int32_t second_reg = (rawHex << 11) >> 27;					// rt
 			int32_t immediate_val = (rawHex << 16) >> 16;				// immediate
@@ -285,15 +288,15 @@ void end_program(){
 
 void print_stats(){
 	printf("---------------------------------");
-    printf("\nInstruction Count Statistics:\n"); 
-    printf("  Total Instructions:	%d\n", total_inst_count);
-    printf("  R-Type:		%d\n", rtype_count);
-    printf("  I-Type:		%d\n", itype_count);
-    printf("  Arithmetic:		%d\n", arith_count);
-    printf("  Logical:		%d\n", logic_count);
-    printf("  Memory Access:	%d\n", memacc_count);
-    printf("  Control Flow:		%d\n", cflow_count);
-	printf("  Program Counter   	%d\n", pc);
+    printf("\nInstruction Counts:\n"); 
+    printf("  Total Number of Instructions:		%d\n", total_inst_count);
+    // printf("  R-Type:		%d\n", rtype_count);
+    // printf("  I-Type:		%d\n", itype_count);
+    printf("  Arithmetic Instructions:		%d\n", arith_count);
+    printf("  Logical Instructions:			%d\n", logic_count);
+    printf("  Memory Access Instructions:		%d\n", memacc_count);
+    printf("  Control Transfer Instructions:	%d\n", cflow_count);
+	printf("  Program Counter   			%d\n", pc);
 	print_registers();
 	return;
 }
@@ -327,7 +330,18 @@ void print_line(decodedLine line, int index) {
 
     printf("\n---------------------------------\n");
 	if (opcode == BZ || opcode == BEQ || opcode == JR) {
-    	printf("\nLine Number: [%d]\n", index - imm + 1);
+		if (branchedFlag == true) {
+    		printf("\nLine Number: [%d]\n", index - imm);
+			if (mode == DEBUG_EXTRA) {
+				printf ("--- Branched! ---\n");
+			}
+		}
+		else {
+			printf("\nLine Number: [%d]\n", index);
+			if (mode == DEBUG_EXTRA) {
+				printf ("--- Skipped! ---\n");
+			}
+		}
 	}
 	else {
 		printf("\nLine Number: [%d]\n", index);
@@ -525,14 +539,13 @@ void opcode_master(decodedLine line) {
 	unsigned int rt 		= line.second_reg_val;
 	unsigned int immediate 	= line.immediate;
 	rtype = 0;
-	was_control_flow = 0;
 	
 	// if (mode == DEBUG_EXTRA) {
 	// 	printf("\nOpcode: 0x%02X\n", opcode);
-	// 	printf("RD: %u\n", rd);
-	// 	printf("RS: %u\n", rs);
-	// 	printf("RT: %u\n", rt);
-	// 	printf("Immediate: %u\n", immediate);
+	// 	printf("RD: %d\n", rd);
+	// 	printf("RS: %d\n", rs);
+	// 	printf("RT: %d\n", rt);
+	// 	printf("Immediate: %d\n", immediate);
 	// }
 
     switch(opcode) {
@@ -641,26 +654,21 @@ void opcode_master(decodedLine line) {
 		{
 		case BZ:
 			if (mode == DEBUG) printf("BZ\n");
-			pc--;
 			bzfunc(rs, immediate);
 			break;
 			
 		case BEQ:
 			if (mode == DEBUG) printf("BEQ\n");
-			pc--;
 			beqfunc(rs, rt, immediate);
-	
 			break;
 			
 		case JR:
 			if (mode == DEBUG) printf("JR\n");
-			pc--;
 			jrfunc(rs);
-
 			break;
 			
 		case HALT:
-			if (mode == DEBUG) {
+			if (mode == DEBUG || mode == DEBUG_EXTRA) {
 				printf("HALT: ENDING PROGRAM\n\n\n\n\n");
 			}
 			else if (mode == DEBUG_EXTRA) {
@@ -699,9 +707,12 @@ void opcode_master(decodedLine line) {
 			print_registers();
 	}
 	// Unless control flow instruction modified pc directly, increment by default
-	if (was_control_flow == 0)
+	if (was_control_flow == 0) {
 		pc++;
-	
+	}
+	else {
+		was_control_flow = 0;
+	}
 }
 
 // addfunc(rt, rs, immediate, true);
@@ -916,12 +927,16 @@ void bzfunc(int rs, int imm) {
     cflow_count++;
     itype_count++;
     total_inst_count++;
-
     if (registers[rs] == 0) {
         pc += (int16_t)imm;
-        was_control_flow = 1;
 		usedRegisters[rs] = 1;
+		branchedFlag = true;
+		was_control_flow = 1;		
     }
+	else {
+		usedRegisters[rs] = 1;
+		branchedFlag = false;
+	}
 }
 
 void beqfunc(int rs, int rt, int imm) {
@@ -933,7 +948,13 @@ void beqfunc(int rs, int rt, int imm) {
         pc += (int16_t)imm;
         was_control_flow = 1;
 		usedRegisters[rs] = 1;
+		branchedFlag = true;
     }
+	else {
+		usedRegisters[rs] = 1;
+		branchedFlag = false;
+	}
+	
 }
 
 
