@@ -22,7 +22,7 @@
 // MIPS system specifications
 #define ADDRESS_BITS 32
 #define NUM_REGISTERS 32
-#define MEMORY_SIZE 1024
+#define MEMORY_SIZE 4096
 #define CLOCK_SIZE 5
 
 // Mode values
@@ -38,7 +38,7 @@
 
 // Commands
 #define ADD 0x00  // Opcode: 000000 
-#define ADDI 0x01 // Opcode: 000001
+#define ADDI 0x01 // Opcode: 000001	
 #define SUB 0x02  // Opcode: 000010
 #define SUBI 0x03 // Opcode: 000011
 #define MUL 0x04  // Opcode: 000100

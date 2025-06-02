@@ -257,9 +257,9 @@ int main(int argc, char *argv[]) {
 	*/
 
 	
-	if(mode == DEBUG)
+	if(mode == DEBUG) {
 		printf("No HALT instruction found- ending program");
-	
+	}
 	
 	end_program();
 
@@ -355,14 +355,20 @@ void print_registers() {
 //     Only memory locations marked as "used" (usedMemory[i] == 1) are printed.
 void print_mem() {
     printf("\n");
-
+	int valid = 0;
     // Iterate through the entire memory space
     for (int i = 0; i < MEMORY_SIZE; i++) {
         // Only print memory locations that have been marked as used
         if (usedMemory[i] == 1) {
+			valid = 1;
             printf("Address %d, Contents: %d\n", i, memory[i]);
         }
     }
+
+	if (valid == 0) {
+		printf("Nothing in memory.\n");
+	}
+
 }
 
 // Helper to print binary of a given width, with space every 4 bits
@@ -958,10 +964,10 @@ void ldwfunc(int rt, int rs, int imm) {
         exit(EXIT_FAILURE);
     }
 
-    registers[rt] = memory[addr / 4];
+    registers[rt] = addr;
 	
 	usedRegisters[rt] = 1;
-	usedMemory[addr / 4] = 1;
+	usedMemory[addr] = 1;
 
     memacc_count++;
     itype_count++;
@@ -977,10 +983,10 @@ void stwfunc(int rt, int rs, int imm) {
         exit(EXIT_FAILURE);
     }
 
-    memory[addr / 4] = registers[rt];
+    memory[addr] = registers[rt];
 	
 	usedRegisters[rt] = 1;
-	usedMemory[addr / 4] = 1;
+	usedMemory[addr] = 1;
 
     memacc_count++;
     itype_count++;
