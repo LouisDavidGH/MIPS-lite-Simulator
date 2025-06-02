@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 	
-    
+	decodedLine *slots[5] = {&pipe.pipe1, &pipe.pipe2, &pipe.pipe3, &pipe.pipe4, &pipe.pipe5};
     
     // Read each line of the trace file
     while (fgets(line, sizeof(line), file)) {
@@ -179,18 +179,7 @@ int main(int argc, char *argv[]) {
 			continue;
 		}
 		
-		// I need to push things trough a pipeline
-		// I need to keep track of their stage
-		// I need to compare registers to make sure there's no dependencies
 		// load up pipes, if hazard then stall, push stages through,  continue when not stalled
-
-		//hazard comparison
-		// if any pipe stage has a destination register within a difference of two to the line before it, halt and push
-		// ***********************ONLY NEED TO PUSH THROUGH STAGES UNTIL WE LOAD A NEW LINE IN, RECORD TRANSACTIONS****************
-		// This way we have a simple non-forwarded system, forwarding has other logic
-		// Is this chopped because we're not allocating registers in which to store values? I think it's fine...
-
-		// while in parameters for hazard, stall. Increment cycle counters
 
 		// Algorithm---------------
 		// load a line into a pipe
@@ -199,82 +188,60 @@ int main(int argc, char *argv[]) {
 		// if no, clock through
 
 		// Pushing a stage through if the pipe are loaded
-		if (0 < pipe.pipe1.pipe_stage && pipe.pipe1.pipe_stage < NUMPIPES) {
-			pipe.pipe1.pipe_stage++;
-		} else pipe.pipe1.pipe_stage = 0; // if a stage zero then no change anyway. If it's five, it gets reset and loaded in the next stage
 
-		if (0 < pipe.pipe2.pipe_stage && pipe.pipe2.pipe_stage < NUMPIPES) {
-			pipe.pipe2.pipe_stage++;
-		} else pipe.pipe2.pipe_stage = 0;
-
-		if (0 < pipe.pipe3.pipe_stage && pipe.pipe3.pipe_stage < NUMPIPES) {
-			pipe.pipe3.pipe_stage++;
-		} else pipe.pipe3.pipe_stage = 0;
-
-		if (0 < pipe.pipe4.pipe_stage && pipe.pipe4.pipe_stage < NUMPIPES) {
-			pipe.pipe4.pipe_stage++;
-		} else pipe.pipe4.pipe_stage = 0;
-
-		if (0 < pipe.pipe5.pipe_stage && pipe.pipe5.pipe_stage < NUMPIPES) {
-			pipe.pipe5.pipe_stage++;
-		} else pipe.pipe5.pipe_stage = 0;
-
-
+		for (int i = 0; i < NUMPIPES; i++){
+			if (0 < slots[i]->pipe_stage && slots[i]->pipe_stage < NUMPIPES) slots[i]->pipe_stage++;
+			else slots[i]->pipe_stage = 0;
+		}
 
 		// if a pipe is empty, exlusively load it with the current line
-		if (!pipe.pipe1.pipe_stage) {
-			pipe.pipe1 = program_store[line_number - 1];
-			pipe.pipe1.pipe_stage++;
-		} 
-		else if (!pipe.pipe2.pipe_stage) {
-			pipe.pipe2 = program_store[line_number - 1];
-			pipe.pipe2.pipe_stage++;
-		} 
-		else if (!pipe.pipe3.pipe_stage){
-			pipe.pipe3 = program_store[line_number - 1];
-			pipe.pipe3.pipe_stage++;
-		} 
-		else if (!pipe.pipe4.pipe_stage){
-			pipe.pipe4 = program_store[line_number - 1];
-			pipe.pipe4.pipe_stage++;
-		} 
-		else if (!pipe.pipe5.pipe_stage){
-			pipe.pipe5 = program_store[line_number - 1];
-			pipe.pipe5.pipe_stage++;
-		} 
 
-		// Load pipe values into an array. Notice the array is in order of pipes 1 through 5
-		int rd[NUMPIPES] = {pipe.pipe1.dest_register, pipe.pipe2.dest_register, pipe.pipe3.dest_register, pipe.pipe4.dest_register, pipe.pipe5.dest_register};
-		int rs[NUMPIPES] = {pipe.pipe1.first_reg_val, pipe.pipe2.first_reg_val, pipe.pipe3.first_reg_val, pipe.pipe4.first_reg_val, pipe.pipe5.first_reg_val};
-		int rt[NUMPIPES] = {pipe.pipe1.second_reg_val, pipe.pipe2.second_reg_val, pipe.pipe3.second_reg_val, pipe.pipe4.second_reg_val, pipe.pipe5.second_reg_val};
+		for (int i = 0; i < NUMPIPES; i++){
+			if (!slots[i]->pipe_stage) {
+				slots[i] = &program_store[line_number - 1];
+				slots[i]->pipe_stage++;
+				break;
+			} 
+		}
 
-		// Cycle through each destination register, check if a there is a hazard. Does this account for the 5-1 case of pipelinig? or 5-2 where a line in 2 needs data in 5? Non-forwarding
-		int stall_cycles;
-		int pipe_that_needs_pushing;
+		// Cycle through each destination register, check if a there is a hazard
+		int stall_cycles = 0;
+		int pipes_to_halt[NUMPIPES] = {1};
+
+		// i is destination registers
 		for (int i = 0; i < NUMPIPES; i++) {
+			// j covers the source registers
 			for (int j = 0; j < NUMPIPES; j++) {
-				if (DEST_NEEDS_SOURCE ) {
-					// hazard
-					// mark and clock through the pipe in particular
-					stall_cycles  = i - j;
-					pipe_that_needs_pushing = j;
+				// If a destination register equals a source register in a different pipe, and it's further along a hazard is detected
+				if ((slots[i]->dest_register == (slots[i]->first_reg_val || slots[i]->second_reg_val)) && (j != i) && (slots[i]->pipe_stage > slots[j]->pipe_stage)) {
+
+					// Equals number of stages minus the difference between the hazardous instructions
+					stall_cycles  = 5 - (abs(i-j));
+					
+					//Determine pipes to halt 
+					for (int k = 0; k < NUMPIPES; k++){
+						if (slots[k]->pipe_stage < slots[i]->pipe_stage)  pipes_to_halt[k] = 0;//pipe k should halt
+					}
 				}
 			}
 			
 		}
 
-		//if ()
+		// push the required pipes through, up clock cycles by # of stalls
+		for (int i = 0; i < NUMPIPES; i++){
+			if (!pipes_to_halt[i]) slots[i]->pipe_stage = 0;
+		}
+		if (stall_cycles) cycle_counter += stall_cycles;
+		else cycle_counter++;
 
-		cycle_counter++;
-
-
+		
 		if (mode == DEBUG) {
 				printf("***************PIPE CYCLE DEBUG**************\n\n");
-				printf("Pipe 1: %d\n", pipe.pipe1.pipe_stage);
-				printf("Pipe 2: %d\n", pipe.pipe2.pipe_stage);
-				printf("Pipe 3: %d\n", pipe.pipe3.pipe_stage);
-				printf("Pipe 4: %d\n", pipe.pipe4.pipe_stage);
-				printf("Pipe 5: %d\n", pipe.pipe5.pipe_stage);
+				printf("Pipe 1: %d\n", slots[0]->pipe_stage);
+				printf("Pipe 2: %d\n", slots[1]->pipe_stage);
+				printf("Pipe 3: %d\n", slots[2]->pipe_stage);
+				printf("Pipe 4: %d\n", slots[3]->pipe_stage);
+				printf("Pipe 5: %d\n", slots[4]->pipe_stage);
 				printf("*********************************\n");
 		}
 
@@ -295,22 +262,7 @@ int main(int argc, char *argv[]) {
 
         // CONTINUE
     }
-	
 
-	/*
-
-	AGREED_METHOD
-		PRE-DECODE
-			Store info using line structs
-
-		Have a master clock
-			Cycles push thing through the pipiline and advance the program
-
-		Pipes
-			Pipes are struct that keep what instruction/line they're on and the stage
-		
-
-	*/
 
 	
 	if(mode == DEBUG)
