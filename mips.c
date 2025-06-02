@@ -30,6 +30,10 @@
 #include <stdbool.h>
 #include "mips.h"
 
+// Function Prototypes
+void print_mem();
+void print_registers();
+
 // struct to hold decoded line information
 typedef struct decoded_line_information {
 	int instruction;
@@ -76,9 +80,12 @@ FILE *file;
 int pc = 0;
 int global_clk[CLOCK_SIZE]; // Currently doesn't do anything
 
+// To help with print statement to see if skipped or branched
 bool branchedFlag = false;
 
 bool rtype = 0;
+
+// Controls pc counter if continue incrementing or not
 int was_control_flow = 0;
 //////////////////////////
 // MAIN
@@ -264,58 +271,98 @@ int main(int argc, char *argv[]) {
 // END OF MAIN
 //////////////////////////
 
-int32_t StringToHex(char *hex_string){
+// Function: StringToHex
+// Description:
+//     Converts a string representing a hexadecimal number (e.g., "0xABCD1234" or "ABCD1234")
+//     into a signed 32-bit integer. This handles two's complement conversion properly.
+int32_t StringToHex(char *hex_string) {
     uint32_t temp;
     int32_t signedInt;
 
     // Convert the hex string to a 32-bit unsigned integer
     temp = (uint32_t)strtoul(hex_string, NULL, 16);
 
-    // Cast the unsigned value to signed (handles two's complement conversion)
+    // Cast the unsigned value to a signed int to interpret the value correctly
+    // in case it's negative (two's complement)
     signedInt = (int32_t)temp;
 
-	return signedInt;
+    return signedInt;
 }
 
-void end_program(){
-	// Close the file
+// Function: end_program
+// Description:
+//     Cleans up the program before exiting.
+//     Closes the input file, prints stats, and exits cleanly.
+void end_program() {
+    // Close the input file
     fclose(file);
-	print_stats();
-	exit(EXIT_SUCCESS);
+
+    // Print instruction execution statistics
+    print_stats();
+
+    // Exit the program successfully
+    exit(EXIT_SUCCESS);
 }
 
-void print_stats(){
-	printf("---------------------------------");
+// Function: print_stats
+// Description:
+//     Prints a summary of instruction counts and the final state of registers and memory.
+void print_stats() {
+    printf("---------------------------------");
     printf("\nInstruction Counts:\n"); 
     printf("  Total Number of Instructions:		%d\n", total_inst_count);
+    
+    // Uncomment if you'd like to see type-specific counts:
     // printf("  R-Type:		%d\n", rtype_count);
     // printf("  I-Type:		%d\n", itype_count);
+    
     printf("  Arithmetic Instructions:		%d\n", arith_count);
     printf("  Logical Instructions:			%d\n", logic_count);
     printf("  Memory Access Instructions:		%d\n", memacc_count);
     printf("  Control Transfer Instructions:	%d\n", cflow_count);
-	printf("  Program Counter   			%d\n", pc);
-	print_registers();
-	print_mem();
-	return;
+    printf("  Program Counter   			%d\n", pc);
+
+    // Print used registers and their values
+    print_registers();
+
+    // Print used memory locations and their contents
+    print_mem();
+
+    return;
 }
 
+
+// Function: print_registers
+// Description:
+//     Prints the contents of the program counter and all used registers.
+//     Only registers marked as "used" (usedRegisters[i] == 1) are printed.
 void print_registers() {
-	printf("\nProgram counter: %d\n", pc);
-	for (int i = 0; i < NUM_REGISTERS; i++) {
-		if (usedRegisters[i] == 1) {
-			printf("R%d: %d\n", i, registers[i]);
-		}
-	}
+    // Print the current program counter
+    printf("\nProgram counter: %d\n", pc);
+
+    // Iterate through all registers
+    for (int i = 0; i < NUM_REGISTERS; i++) {
+        // Only print registers that have been marked as used
+        if (usedRegisters[i] == 1) {
+            printf("R%d: %d\n", i, registers[i]);
+        }
+    }
 }
 
-void print_mem(){
-	printf("\n");
-	for (int i = 0; i < MEMORY_SIZE; i++) {
-		if (usedMemory[i] == 1) {
-			printf("Address %d, Contents: %d\n", i, memory[i]);
-		}
-	}
+// Function: print_mem
+// Description:
+//     Prints the contents of used memory addresses.
+//     Only memory locations marked as "used" (usedMemory[i] == 1) are printed.
+void print_mem() {
+    printf("\n");
+
+    // Iterate through the entire memory space
+    for (int i = 0; i < MEMORY_SIZE; i++) {
+        // Only print memory locations that have been marked as used
+        if (usedMemory[i] == 1) {
+            printf("Address %d, Contents: %d\n", i, memory[i]);
+        }
+    }
 }
 
 // Helper to print binary of a given width, with space every 4 bits
@@ -328,6 +375,7 @@ void printBinaryFixedWidth(unsigned int val, int width) {
         }
     }
 }
+
 
 void print_line(decodedLine line, int index) {
     unsigned int opcode     = line.instruction;
@@ -441,12 +489,14 @@ void print_line(decodedLine line, int index) {
 		case LDW:
 			printf("LDW   (I-type)\n");
 			printf("    Format   : LDW rt, offset(rs)\n");
+			printf("    Equation : R[rt] = MEM[R[rs] + imm]\n");
 			printf("    Equation : R[%d] = MEM[R[%d] + %d]\n", rt, rs, imm);
 			break;
 
 		case STW:
 			printf("STW   (I-type)\n");
 			printf("    Format   : STW rt, offset(rs)\n");
+			printf("    Equation : MEM[rs + offset] = rt\n");
 			printf("    Equation : MEM[R[%d] + %d] = R[%d]\n", rs, imm, rt);
 			break;
 
@@ -909,7 +959,9 @@ void ldwfunc(int rt, int rs, int imm) {
     }
 
     registers[rt] = memory[addr / 4];
+	
 	usedRegisters[rt] = 1;
+	usedMemory[addr / 4] = 1;
 
     memacc_count++;
     itype_count++;
@@ -926,6 +978,7 @@ void stwfunc(int rt, int rs, int imm) {
     }
 
     memory[addr / 4] = registers[rt];
+	
 	usedRegisters[rt] = 1;
 	usedMemory[addr / 4] = 1;
 
@@ -975,8 +1028,10 @@ void jrfunc(int rs) {
     itype_count++;
     total_inst_count++;
 	was_control_flow = 1;
-
+	
+	branchedFlag = true;
     pc = registers[rs];  // Assume PC holds instruction index, not byte address
+	
 	usedRegisters[rs] = 1;
 }
 
