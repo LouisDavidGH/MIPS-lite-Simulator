@@ -78,7 +78,7 @@ int global_clk[CLOCK_SIZE]; // Currently doesn't do anything
 bool branchedFlag = false;
 
 bool rtype = 0;
-bool was_control_flow = 0;
+int was_control_flow = 0;
 //////////////////////////
 // MAIN
 //////////////////////////
@@ -710,6 +710,9 @@ void opcode_master(decodedLine line) {
 	if (was_control_flow == 0) {
 		pc++;
 	}
+	else if (was_control_flow == -1){
+		return;
+	}
 	else {
 		was_control_flow = 0;
 	}
@@ -943,7 +946,7 @@ void beqfunc(int rs, int rt, int imm) {
     cflow_count++;
     itype_count++;
     total_inst_count++;
-
+	
     if (registers[rs] == registers[rt]) {
         pc += (int16_t)imm;
         was_control_flow = 1;
@@ -973,7 +976,7 @@ void haltfunc(){
 	cflow_count++;
 	itype_count++;
 	total_inst_count++;
-	was_control_flow = 1;
+	was_control_flow = -1;
 	
 	end_program();
 }
