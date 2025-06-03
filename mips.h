@@ -29,6 +29,11 @@
 #define DEBUG 1
 #define NORMAL 0
 
+// Functional Mode values
+#define NO_PIPE 2
+#define NO_FWD 3
+#define FWD 4
+
 
 // Buffer sizes
 #define HEX_STRING_LENGTH 8             // 8 hex characters = 32 bits
@@ -66,6 +71,7 @@
 #define JR 0x10
 #define HALT 0x11
 
+#define EOP 0xFA
 #define NOP 0xFF
 
 

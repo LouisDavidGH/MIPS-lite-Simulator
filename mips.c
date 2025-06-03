@@ -1,15 +1,6 @@
 /**
  * mips.c - Source code file for a MIPS-lite simulation
  *
- * @authors:    Evan Brown (evbr2@pdx.edu)
- * 				Louis-David Gendron-Herndon (loge2@pdx.edu)
- *				Ameer Melli (amelli@pdx.edu)
- *				Anthony Le (anthle@pdx.edu)
- *
- *
- * @date:       May 31, 2025
- * @version:    2.0
- *
  *
  * MODES:		
  *				NORMAL:		Print instruction statistics at the end of the program.
@@ -56,6 +47,7 @@ int32_t memory[MEMORY_SIZE];
 
 // Stores all of the line's information in one array
 decodedLine program_store[MEMORY_SIZE];
+uint32_t rawHex_array[MEMORY_SIZE];
 
 // Variable for our pipe struct
 pipeline pipe;
@@ -72,6 +64,9 @@ int total_inst_count = 0;
 // Program run more
 int mode;
 
+// Function mode
+int functional_mode;
+
 // File pointer
 FILE *file;
 
@@ -84,6 +79,17 @@ bool was_control_flow = 0;
 bool halt_executed = false;
 bool ready_to_end = false;
 
+// Hazard and newline loaded variables
+bool hazard = false;
+bool newInstAdded = true;
+bool end_of_fetch = false;
+
+uint32_t rawHex;
+int32_t opcode;
+int rs;
+int rt;
+int rd;
+
 
 
 int main(int argc, char *argv[]) {
@@ -92,8 +98,8 @@ int main(int argc, char *argv[]) {
 	int line_number = 0;
 	
     // Check for at least two arguments: mode and filename
-    if (argc < 3) {
-        printf("Usage: %s <MODE> <TRACE_FILE>\n", argv[0]);
+    if (argc < 4) {
+        printf("Usage: %s <DEBUG/NORMAL> <NO_PIPE/NO_FWD/FWD> <TRACE_FILE>\n", argv[0]);
         return EXIT_FAILURE;
     }
 	
@@ -107,8 +113,24 @@ int main(int argc, char *argv[]) {
 		mode = NORMAL;
 	}
 	
+	
+	
+	// Set mode specified in the first argument
+	if (strcmp(argv[2], "NO_PIPE") == 0)
+		functional_mode = NO_PIPE;
+	else if (strcmp(argv[1], "NO_FWD") == 0)
+		functional_mode = NO_FWD;
+	else if (strcmp(argv[1], "FWD") == 0)
+		functional_mode = FWD;
+	else {
+		printf("\nInvalid mode. Defaulting to FWD (Forwarding Mode).\n");
+		functional_mode = FWD;
+	}
+	
+	
+	
 	// Open the trace file specified in the second argument
-    file = fopen(argv[2], "r");
+    file = fopen(argv[3], "r");
     if (file == NULL) {
         if (mode == DEBUG)
 			perror("Error opening trace file");
@@ -120,31 +142,39 @@ int main(int argc, char *argv[]) {
     decodedLine empty = {.instruction=NOP, .dest_register=-1, .first_reg_val=-1, .second_reg_val=-1, .immediate=0, .pipe_stage=0};
     pipe.pipe1 = empty; pipe.pipe2=empty; pipe.pipe3=empty; pipe.pipe4=empty; pipe.pipe5=empty;
     
-    // Read each line of the trace file
-    while (1) {
+	decodedLine newinst = empty;
+	
+	
+	// fill program_store array
+	while (fgets(line, sizeof(line), file) != NULL){
+		
 		line_number++;
-		fgets(line, sizeof(line), file);
-        // Remove newlines
-        line[strcspn(line, "\r\n")] = '\0';
+		
+		// Remove newlines
+		line[strcspn(line, "\r\n")] = '\0';
 
-        // Skip empty lines
-        if (strlen(line) == 0)
-            continue;
+		// Skip empty lines
+		if (strlen(line) == 0)
+			continue;
 		
 		// Validate line length
-        if (strlen(line) != HEX_STRING_LENGTH) {
-            if (mode == DEBUG)
-                printf("Error: Invalid instruction length at line %d (%zu characters). Exiting.\n", line_number, strlen(line));
+		if (strlen(line) != HEX_STRING_LENGTH) {
+			if (mode == DEBUG)
+				printf("Error: Invalid instruction length at line %d (%zu characters). Exiting.\n", line_number, strlen(line));
 			
 			fclose(file);
-            return EXIT_FAILURE; // End the program if incorrect length
-        }
-
+			return EXIT_FAILURE; // End the program if incorrect length
+		}
+		
+		program_store[line_number - 1] = empty;
+		
 		// this is converting the intake to an integer
-		uint32_t rawHex = StringToHex(line);
-
+		rawHex = StringToHex(line);
+		
+		rawHex_array[line_number - 1] = rawHex;
+		
 		// bit shift the intruction param by twenty six
-		int32_t opcode = rawHex>>26;
+		opcode = rawHex>>26;
 
 		// Set instruction param
 		program_store[line_number - 1].instruction = opcode;
@@ -152,36 +182,26 @@ int main(int argc, char *argv[]) {
 		// Set pipline stage to zero
 		program_store[line_number - 1].pipe_stage = 0;
 
-		// Most recent line struct to iterate on
-		decodedLine newinst = empty;
-        newinst.instruction = opcode;
-
 		// Getting registers by bit shifting and masking
-        int rs = (rawHex >> 21) & 0x1F;
-        int rt = (rawHex >> 16) & 0x1F;
-        int rd = (rawHex >> 11) & 0x1F;
+		rs = (rawHex >> 21) & 0x1F;
+		rt = (rawHex >> 16) & 0x1F;
+		rd = (rawHex >> 11) & 0x1F;
 
 		// Loading in R-type instruction values
-        if (opcode % 2 == 0 && opcode <= 0x0A) {
-            // R-type
-            newinst.dest_register = rd;
-            newinst.first_reg_val = rs;
-            newinst.second_reg_val = rt;
+		if (opcode % 2 == 0 && opcode <= 0x0A) {
+			// R-type
 			program_store[line_number - 1].dest_register = rd;
 			program_store[line_number - 1].first_reg_val = rs;
 			program_store[line_number - 1].second_reg_val = rt;
-        } 
+		} 
 		
 		// Loading in I-type instruction values
 		else if (opcode <= 0x11){
-            // I-type
-            newinst.dest_register = rt;
-            newinst.first_reg_val = rs;
-            newinst.immediate = rawHex & 0xFFFF;
+			// I-type
 			program_store[line_number - 1].dest_register = rt;
 			program_store[line_number - 1].first_reg_val = rs;
 			program_store[line_number - 1].immediate = rawHex & 0xFFFF;
-        }
+		}
 		
 		//DEBUG
 		else {
@@ -190,62 +210,279 @@ int main(int argc, char *argv[]) {
 				//  printf("Binary: %u\n", program_store[line_number - 1]);
 				printf("%d does not map to a valid instruction\n\n", program_store[line_number - 1].instruction);
 			}
-			continue;
 		}
 		
-		// Array of decodedLines which serves as pipes
-		decodedLine *slots[5] = {&pipe.pipe1, &pipe.pipe2, &pipe.pipe3, &pipe.pipe4, &pipe.pipe5};
-
-		// 3 decodedLine variables to hold the line that is in a particular stage
-        decodedLine *inID = NULL, *inEX = NULL, *inMEM = NULL;
-
-		// Mark which line is in a particular stage
-        for (int i = 0; i < 5; i++) {
-            if (slots[i]->pipe_stage == 2) inID = slots[i];
-            if (slots[i]->pipe_stage == 3) inEX = slots[i];
-            if (slots[i]->pipe_stage == 4) inMEM = slots[i];
-        }
-
-		// Hazard and newline loaded variables
-		bool hazard = false;
-		bool newInstAdded = false;
-
-		// memory access instructions - MEM-ID hazard handling
-		if (inID && inMEM && findHazard(inMEM, inID)) {
-			hazard = true;
-			cycle_counter++;
+	}
+	
+	// Mark the end of the trace file in program_store
+	program_store[line_number] = empty;
+	program_store[line_number].instruction = EOP;
+	
+	pc = -1; // will be incremented first thing to pc=0 AKA the first trace file line
+	
+	
+	
+	
+	if (functional_mode == NO_PIPE){
+		for (pc = 0; pc <= line_number; pc++){
+			//DEBUG: print each binary string
+			if ((mode == DEBUG) && (rawHex_array[pc] > 0x0)) {
+				printf("\n\n-------------------------------------------------------\n");
+				printf("\n---Line %d---\n", pc + 1);
+			   //  printf("Binary: %u\n", program_store[pc]);
+				printf("Hex Number:\t\t0x%X\n", rawHex_array[pc]);
+				printf("Instruction:\t\t0x%X, %d\n", program_store[pc].instruction, program_store[pc].instruction);
+				printf("Destination register:\t%d\n", program_store[pc].dest_register);
+				printf("1st source register:\t%d\n", program_store[pc].first_reg_val);
+				if (opcode <= 0xB && opcode % 2 == 0) printf ("2nd source register:\t\t%d\n\n", program_store[pc].second_reg_val);
+				else printf("Immediate value:   %6d\n\n", (int16_t)program_store[pc].immediate);
+			}
 			
-			// DEBUG
-			if (mode == DEBUG) printf("\n\n\n\nStall at cycle %d: MEM-ID hazard detected\n\n\n\n", cycle_counter);
+			opcode_master(program_store[pc]);
+			cycle_counter += 5; // 5 cycles per instruction
 			
-			// Iterate through pipes and stall as appropriate
-            for (int i = 0; i < 5; i++) {
-                if (slots[i]->pipe_stage > 2 && slots[i]->pipe_stage < 5) {
-					if (slots[i]->pipe_stage == 3) {
-						if (!opcode_master(*slots[i]))
-							pc++;
+			if (program_store[pc].instruction == HALT)
+				end_program();
+		}
+	}
+	
+	else if ((functional_mode == NO_FWD) || (functional_mode == FWD)){
+		while (1) {
+			// if a new instruction is added to the pipeline 
+			// in the previous iteration of the while loop,
+			// then get a NEW new instruction from the trace file.
+			if (newInstAdded){
+				if (mode == DEBUG) printf("Loading new line from trace file\n\n");
+				
+				pc++;
+				
+				if (program_store[pc].instruction == EOP){
+					pc--;
+					newinst = empty;
+					end_of_fetch = true;
+				}	
+				
+				else {
+					newinst = program_store[pc];
+					newInstAdded = false;
+				}
+				
+			}
+
+			
+
+
+			
+			// Array of decodedLines which serves as pipes
+			decodedLine *slots[5] = {&pipe.pipe1, &pipe.pipe2, &pipe.pipe3, &pipe.pipe4, &pipe.pipe5};
+
+			// 3 decodedLine variables to hold the line that is in a particular stage
+			decodedLine *inID = NULL, *inEX = NULL, *inMEM = NULL;
+
+			// Mark which line is in a particular stage
+			for (int i = 0; i < 5; i++) {
+				if (slots[i]->pipe_stage == 2) inID = slots[i];
+				if (slots[i]->pipe_stage == 3) inEX = slots[i];
+				if (slots[i]->pipe_stage == 4) inMEM = slots[i];
+			}
+
+
+			// ID-EX hazard handling
+			if (inID && inEX && findHazard(inEX, inID)) {
+				hazard = true;
+				cycle_counter++;
+				
+				// DEBUG
+				if (mode == DEBUG) printf("\n\n\n\nStall at cycle %d: EX-ID hazard detected\n\n\n\n", cycle_counter);
+
+
+				// if (functional_mode == FORWARDING)
+					// iterate through pipes and only stall if _
+
+
+				// Iterate through pipes and stall as appropriate
+				for (int i = 0; i < 5; i++) {
+					if (slots[i]->pipe_stage > 2 && slots[i]->pipe_stage < 5) {
+						if (slots[i]->pipe_stage == 3) {
+							opcode_master(*slots[i]);
+						}
+						slots[i]->pipe_stage++;
 					}
-                    slots[i]->pipe_stage++;
-                }
-				// Write-back logic once a line is pushed through its respective pipe
-				else if (slots[i]->pipe_stage == 5){
-					printf("\n\nWriting back data from pipe %d\n\n", i+1);
-					if (halt_executed && (slots[i]->instruction == HALT)){
-						end_program();
+					// Write-back logic once a line is pushed through its respective pipe
+					else if (slots[i]->pipe_stage == 5){
+						printf("\n\nWriting back data from pipe %d\n\n", i+1);
+						if (halt_executed && (slots[i]->instruction == HALT)){
+							end_program();
+						}
+						
+						*slots[i] = empty;
 					}
 					
-					*slots[i] = empty;
+					// Load a new instruction in the pipe
+					if (!end_of_fetch && (slots[i]->pipe_stage == 0) && !newInstAdded){
+						bool already_have_fetch_inst = 0;
+						for (int j=0; j<5; j++)
+							if (slots[j]->pipe_stage == 1)
+								already_have_fetch_inst = 1;
+							
+						if (already_have_fetch_inst == 0){
+							newinst.pipe_stage = 1;
+							*slots[i] = newinst;
+							newInstAdded = true;
+							printf("New instruction added to pipeline\n\n");
+						}
+					}
+					
 				}
-				// Load a new instruction in the pipe
-				if ((slots[i]->pipe_stage == 0) && !newInstAdded) {
-					newinst.pipe_stage = 1;
-					*slots[i] = newinst;
-					newInstAdded = true;
+				
+				// DEBUG: pipe cycle debug
+				if (mode == DEBUG) {
+						printf("***************PIPE CYCLE DEBUG**************\n\n");
+						printf("Pipe 1: %d\n", slots[0]->pipe_stage);
+						printf("Pipe 2: %d\n", slots[1]->pipe_stage);
+						printf("Pipe 3: %d\n", slots[2]->pipe_stage);
+						printf("Pipe 4: %d\n", slots[3]->pipe_stage);
+						printf("Pipe 5: %d\n", slots[4]->pipe_stage);
+						printf("*********************************\n");
 				}
-            }
+
+				// opcode_master(program_store[line_number - 1]);
+
+				//DEBUG: print each binary string
+				if ((mode == DEBUG) && (rawHex_array[pc] > 0x0)) {
+					printf("---Line %d---\n", pc + 1);
+				   //  printf("Binary: %u\n", program_store[pc]);
+					printf("Hex Number:\t\t0x%X\n", rawHex_array[pc]);
+					printf("Instruction:\t\t0x%X, %d\n", program_store[pc].instruction, program_store[pc].instruction);
+					printf("Destination register:\t%d\n", program_store[pc].dest_register);
+					printf("1st source register:\t%d\n", program_store[pc].first_reg_val);
+					if (opcode <= 0xB && opcode % 2 == 0) printf ("2nd source register:\t\t%d\n\n", program_store[pc].second_reg_val);
+					else printf("Immediate value:   %6d\n\n", (int16_t)program_store[pc].immediate);
+				}
+			}
+
+
+			// Re-check which lines are in which stages
+			for (int i = 0; i < 5; i++) {
+				if (slots[i]->pipe_stage == 2) inID = slots[i];
+				if (slots[i]->pipe_stage == 3) inEX = slots[i];
+				if (slots[i]->pipe_stage == 4) inMEM = slots[i];
+			}
+
+
+			// memory access instructions - MEM-ID hazard handling
+			if (inID && inMEM && findHazard(inMEM, inID)) {
+				hazard = true;
+				cycle_counter++;
+				
+				// DEBUG
+				if (mode == DEBUG) printf("\n\n\n\nStall at cycle %d: MEM-ID hazard detected\n\n\n\n", cycle_counter);
+				
+				// Iterate through pipes and stall as appropriate
+				for (int i = 0; i < 5; i++) {
+					if (slots[i]->pipe_stage > 2 && slots[i]->pipe_stage < 5) {
+						if (slots[i]->pipe_stage == 3) {
+							opcode_master(*slots[i]);
+						}
+						slots[i]->pipe_stage++;
+					}
+					// Write-back logic once a line is pushed through its respective pipe
+					else if (slots[i]->pipe_stage == 5){
+						printf("\n\nWriting back data from pipe %d\n\n", i+1);
+						if (halt_executed && (slots[i]->instruction == HALT)){
+							end_program();
+						}
+						
+						*slots[i] = empty;
+					}
+
+					// Load a new instruction in the pipe
+					if (!end_of_fetch && (slots[i]->pipe_stage == 0) && !newInstAdded){
+						bool already_have_fetch_inst = 0;
+						for (int j=0; j<5; j++)
+							if (slots[j]->pipe_stage == 1)
+								already_have_fetch_inst = 1;
+							
+						if (already_have_fetch_inst == 0){
+							newinst.pipe_stage = 1;
+							*slots[i] = newinst;
+							newInstAdded = true;
+							printf("New instruction added to pipeline");
+						}
+					}
+				}
+				
+				// DEBUG: pipe cycle debug
+				if (mode == DEBUG) {
+						printf("***************PIPE CYCLE DEBUG**************\n\n");
+						printf("Pipe 1: %d\n", slots[0]->pipe_stage);
+						printf("Pipe 2: %d\n", slots[1]->pipe_stage);
+						printf("Pipe 3: %d\n", slots[2]->pipe_stage);
+						printf("Pipe 4: %d\n", slots[3]->pipe_stage);
+						printf("Pipe 5: %d\n", slots[4]->pipe_stage);
+						printf("*********************************\n");
+				}
+
+				// opcode_master(program_store[line_number - 1]);
+
+				//DEBUG: print each binary string
+				if ((mode == DEBUG) && (rawHex_array[pc] > 0x0)) {
+					printf("---Line %d---\n", pc + 1);
+				   //  printf("Binary: %u\n", program_store[pc]);
+					printf("Hex Number:\t\t0x%X\n", rawHex_array[pc]);
+					printf("Instruction:\t\t0x%X, %d\n", program_store[pc].instruction, program_store[pc].instruction);
+					printf("Destination register:\t%d\n", program_store[pc].dest_register);
+					printf("1st source register:\t%d\n", program_store[pc].first_reg_val);
+					if (opcode <= 0xB && opcode % 2 == 0) printf ("2nd source register:\t\t%d\n\n", program_store[pc].second_reg_val);
+					else printf("Immediate value:   %6d\n\n", (int16_t)program_store[pc].immediate);
+				}
+			}
+
+
 			
-			// DEBUG: pipe cycle debug
-			if (mode == DEBUG) {
+			// No-hazard case
+			if (!hazard) {
+				cycle_counter++;
+				
+				// Execute on each instruction once they're in the EX stage
+				for (int i = 0; i < 5; i++) {
+					if (slots[i]->pipe_stage > 0 && slots[i]->pipe_stage < 5) {
+						if (slots[i]->pipe_stage == 3) {
+							opcode_master(*slots[i]);
+						}
+						slots[i]->pipe_stage++;
+					}
+					// Print Write-backs
+					else if (slots[i]->pipe_stage == 5){
+						printf("\n\nWriting back data from pipe %d\n\n", i+1);
+						if (halt_executed && (slots[i]->instruction == HALT)){
+							end_program();
+						}
+						
+						*slots[i] = empty;
+					}
+					
+					// Load a new instruction in the pipe
+					if (!end_of_fetch && (slots[i]->pipe_stage == 0) && !newInstAdded){
+						// determine if there's an empty 
+						bool already_have_fetch_inst = 0;
+						for (int j=0; j<5; j++) {
+							if (slots[j]->pipe_stage == 1)
+								already_have_fetch_inst = 1;
+						}
+							
+						if (already_have_fetch_inst == 0){
+							newinst.pipe_stage = 1;
+							*slots[i] = newinst;
+							newInstAdded = true;
+							printf("New instruction added to pipeline\n\n");
+						}
+					}
+				}	
+				
+				
+				// DEBUG: pipe cycle debug
+				if (mode == DEBUG) {
 					printf("***************PIPE CYCLE DEBUG**************\n\n");
 					printf("Pipe 1: %d\n", slots[0]->pipe_stage);
 					printf("Pipe 2: %d\n", slots[1]->pipe_stage);
@@ -253,152 +490,41 @@ int main(int argc, char *argv[]) {
 					printf("Pipe 4: %d\n", slots[3]->pipe_stage);
 					printf("Pipe 5: %d\n", slots[4]->pipe_stage);
 					printf("*********************************\n");
-			}
-
-			// opcode_master(program_store[line_number - 1]);
-
-			// DEBUG: print each binary string
-			if (mode == DEBUG) {
-				printf("---Line %d---\n", line_number);
-			   //  printf("Binary: %u\n", program_store[line_number - 1]);
-				printf("Hex Number: %X\n", rawHex);
-				printf("Instruction: 0x%X, %d\n", program_store[line_number - 1].instruction, program_store[line_number - 1].instruction);
-				printf("Destination register: %d\n", program_store[line_number - 1].dest_register);
-				printf("1st source register: %d\n", program_store[line_number - 1].first_reg_val);
-				if (opcode <= 0xB && opcode % 2 == 0) printf ("2nd source register: %d\n\n", program_store[line_number - 1].second_reg_val);
-				else printf("Immediate value: %d\n\n", program_store[line_number - 1].immediate);
-			}
-		}
-
-
-
-		// ID-EX hazard handling
-		if (inID && inEX && findHazard(inEX, inID)) {
-			hazard = true;
-			cycle_counter++;
-			
-			// DEBUG
-			if (mode == DEBUG) printf("\n\n\n\nStall at cycle %d: EX-ID hazard detected\n\n\n\n", cycle_counter);
-
-			// Iterate through pipes and stall as appropriate
-            for (int i = 0; i < 5; i++) {
-                if (slots[i]->pipe_stage > 2 && slots[i]->pipe_stage < 5) {
-					if (slots[i]->pipe_stage == 3) {
-						if (!opcode_master(*slots[i]))
-							pc++;
-					}
-                    slots[i]->pipe_stage++;
-                }
-				// Write-back logic once a line is pushed through its respective pipe
-				else if (slots[i]->pipe_stage == 5){
-					printf("\n\nWriting back data from pipe %d\n\n", i+1);
-					if (halt_executed && (slots[i]->instruction == HALT)){
-						end_program();
-					}
-					
-					*slots[i] = empty;
 				}
-				// Load a new instruction in the pipe
-				if ((slots[i]->pipe_stage == 0) && !newInstAdded) {
-					newinst.pipe_stage = 1;
-					*slots[i] = newinst;
-					newInstAdded = true;
+
+				// opcode_master(program_store[pc]);
+
+				//DEBUG: print each binary string
+				if ((mode == DEBUG) && (rawHex_array[pc] > 0x0)) {
+					printf("---Line %d---\n", pc + 1);
+				   //  printf("Binary: %u\n", program_store[pc]);
+					printf("Hex Number:\t\t0x%X\n", rawHex_array[pc]);
+					printf("Instruction:\t\t0x%X, %d\n", program_store[pc].instruction, program_store[pc].instruction);
+					printf("Destination register:\t%d\n", program_store[pc].dest_register);
+					printf("1st source register:\t%d\n", program_store[pc].first_reg_val);
+					if (opcode <= 0xB && opcode % 2 == 0) printf ("2nd source register:\t\t%d\n\n", program_store[pc].second_reg_val);
+					else printf("Immediate value:   %6d\n\n", (int16_t)program_store[pc].immediate);
 				}
-            }
-			
-			// DEBUG: pipe cycle debug
-			if (mode == DEBUG) {
-					printf("***************PIPE CYCLE DEBUG**************\n\n");
-					printf("Pipe 1: %d\n", slots[0]->pipe_stage);
-					printf("Pipe 2: %d\n", slots[1]->pipe_stage);
-					printf("Pipe 3: %d\n", slots[2]->pipe_stage);
-					printf("Pipe 4: %d\n", slots[3]->pipe_stage);
-					printf("Pipe 5: %d\n", slots[4]->pipe_stage);
-					printf("*********************************\n");
+				
 			}
-
-			// opcode_master(program_store[line_number - 1]);
-
-			// DEBUG: print each binary string
-			if (mode == DEBUG) {
-				printf("---Line %d---\n", line_number);
-			   //  printf("Binary: %u\n", program_store[line_number - 1]);
-				printf("Hex Number: %X\n", rawHex);
-				printf("Instruction: 0x%X, %d\n", program_store[line_number - 1].instruction, program_store[line_number - 1].instruction);
-				printf("Destination register: %d\n", program_store[line_number - 1].dest_register);
-				printf("1st source register: %d\n", program_store[line_number - 1].first_reg_val);
-				if (opcode <= 0xB && opcode % 2 == 0) printf ("2nd source register: %d\n\n", program_store[line_number - 1].second_reg_val);
-				else printf("Immediate value: %d\n\n", program_store[line_number - 1].immediate);
+			
+			
+			
+			// PLEASE DO NOT GET RID OF THIS IT MAKES IT RUN FOREVER TRUST ME
+			hazard = false;
+			
+			// once we've hit EOF *and* every stage is empty, we're done
+			if (end_of_fetch
+			  && pipe.pipe1.pipe_stage == 0
+			  && pipe.pipe2.pipe_stage == 0
+			  && pipe.pipe3.pipe_stage == 0
+			  && pipe.pipe4.pipe_stage == 0
+			  && pipe.pipe5.pipe_stage == 0) {
+				end_program();   // prints stats + exit
 			}
-		}
-
-		// No-hazard case
-		if (!hazard) {
-			cycle_counter++;
-			
-			// Execute on each instruction once they're in the EX stage
-            for (int i = 0; i < 5; i++) {
-                if (slots[i]->pipe_stage > 0 && slots[i]->pipe_stage < 5) {
-					if (slots[i]->pipe_stage == 3) {
-						if (!opcode_master(*slots[i]))
-							pc++;
-					}
-					slots[i]->pipe_stage++;
-                }
-				// Print Write-backs
-				else if (slots[i]->pipe_stage == 5){
-					printf("\n\nWriting back data from pipe %d\n\n", i+1);
-					if (halt_executed && (slots[i]->instruction == HALT)){
-						end_program();
-					}
-					
-					*slots[i] = empty;
-				}
-				// Load new line into the pipe
-				if ((slots[i]->pipe_stage == 0) && !newInstAdded) {
-					newinst.pipe_stage = 1;
-					*slots[i] = newinst;
-					newInstAdded = true;
-				}
-			}	
-			
-			
-			// DEBUG: pipe cycle debug
-			if (mode == DEBUG) {
-				printf("***************PIPE CYCLE DEBUG**************\n\n");
-				printf("Pipe 1: %d\n", slots[0]->pipe_stage);
-				printf("Pipe 2: %d\n", slots[1]->pipe_stage);
-				printf("Pipe 3: %d\n", slots[2]->pipe_stage);
-				printf("Pipe 4: %d\n", slots[3]->pipe_stage);
-				printf("Pipe 5: %d\n", slots[4]->pipe_stage);
-				printf("*********************************\n");
-			}
-
-			// opcode_master(program_store[line_number - 1]);
-
-			/* DEBUG: print each binary string
-			if (mode == DEBUG) {
-				printf("---Line %d---\n", line_number);
-			   //  printf("Binary: %u\n", program_store[line_number - 1]);
-				printf("Hex Number: %X\n", rawHex);
-				printf("Instruction: 0x%X, %d\n", program_store[line_number - 1].instruction, program_store[line_number - 1].instruction);
-				printf("Destination register: %d\n", program_store[line_number - 1].dest_register);
-				printf("1st source register: %d\n", program_store[line_number - 1].first_reg_val);
-				if (opcode <= 0xB && opcode % 2 == 0) printf ("2nd source register: %d\n\n", program_store[line_number - 1].second_reg_val);
-				else printf("Immediate value: %d\n\n", program_store[line_number - 1].immediate);
-			}*/
 			
 		}
-
-		
-
-		
-	
-	
-    }
-
-	
-
+	}
 
 
 	
@@ -441,7 +567,8 @@ bool findHazard(const decodedLine *wr, const decodedLine *rd) {
     return false;
 }
 
-int32_t StringToHex(char *hex_string){
+
+int32_t StringToHex(char *hex_string) {
     uint32_t temp;
     int32_t signedInt;
 
@@ -455,22 +582,26 @@ int32_t StringToHex(char *hex_string){
 }
 
 
-void end_program(){
+void end_program() {
 	
 	print_stats();
 	exit(EXIT_SUCCESS);
 }
 
 
-void print_stats(){
-    printf("\nInstruction Count Statistics:\n"); 
+void print_stats() {
+    printf("\n\n\n\nInstruction Count Statistics:\n\n"); 
+	printf("================================\n");
     printf("  Total Instructions:	%d\n", total_inst_count);
+	printf("--------------------------------\n");
     printf("  R-Type:		%d\n", rtype_count);
     printf("  I-Type:		%d\n", itype_count);
+	printf("--------------------------------\n");
     printf("  Arithmetic:		%d\n", arith_count);
     printf("  Logical:		%d\n", logic_count);
     printf("  Memory Access:	%d\n", memacc_count);
     printf("  Control Flow:		%d\n", cflow_count);
+	printf("--------------------------------\n");
 	printf("  Cycles:		%d\n", cycle_counter);
 	
 	return;
@@ -493,33 +624,33 @@ bool opcode_master(decodedLine line) {
 		// Arithmetic Instructions:
 		{
 		case ADD:
-			if (mode == DEBUG) printf("ADD\n");
+			if (mode == DEBUG) printf("\nADD Instruction Executed\n");
 			addfunc(rd, rs, rt, false);
 			break;
 			
 		case ADDI:
-			if (mode == DEBUG) printf("ADDI\n");
+			if (mode == DEBUG) printf("\nADDI Instruction Executed\n");
 			addfunc(rt, rs, immediate, true);
 			break;
 			
 		case SUB:
-			if (mode == DEBUG) printf("SUB\n");
+			if (mode == DEBUG) printf("\nSUB Instruction Executed\n");
 			subfunc(rd, rs, rt, false);
 			break;
 			
 		case SUBI:
-			if (mode == DEBUG) printf("SUBI\n");
+			if (mode == DEBUG) printf("\nSUBI Instruction Executed\n");
 			subfunc(rt, rs, immediate, true);
 			break;
 			
 		case MUL:
-			if (mode == DEBUG) printf("MUL\n");
+			if (mode == DEBUG) printf("\nMUL Instruction Executed\n");
 			mulfunc(rd, rs, rt, false);
 			
 			break;
 			
 		case MULI:
-			if (mode == DEBUG) printf("MULI\n");
+			if (mode == DEBUG) printf("\nMULI Instruction Executed\n");
 			mulfunc(rt, rs, immediate, true);
 			break;
 		}
@@ -528,32 +659,32 @@ bool opcode_master(decodedLine line) {
 		// Logical Instructions:
 		{
 		case OR:
-			if (mode == DEBUG) printf("OR\n");
+			if (mode == DEBUG) printf("\nOR Instruction Executed\n");
 			orfunc(rd, rs, rt, false);
 			break;
 			
 		case ORI:
-			if (mode == DEBUG) printf("ORI\n");
+			if (mode == DEBUG) printf("\nORI Instruction Executed\n");
 			orfunc(rt, rs, immediate, true);
 			break;
 			
 		case AND:
-			if (mode == DEBUG) printf("AND\n");
+			if (mode == DEBUG) printf("\nAND Instruction Executed\n");
 			andfunc(rd, rs, rt, false);
 			break;
 			
 		case ANDI:
-			if (mode == DEBUG) printf("ANDI\n");
+			if (mode == DEBUG) printf("\nANDI Instruction Executed\n");
 			andfunc(rt, rs, immediate, true);
 			break;
 			
 		case XOR:
-			if (mode == DEBUG) printf("XOR\n");
+			if (mode == DEBUG) printf("\nXOR Instruction Executed\n");
 			xorfunc(rd, rs, rt, false);
 			break;
 			
 		case XORI:
-			if (mode == DEBUG) printf("XORI\n");
+			if (mode == DEBUG) printf("\nXORI Instruction Executed\n");
 			xorfunc(rt, rs, immediate, true);
 			break;	
 		}
@@ -562,12 +693,12 @@ bool opcode_master(decodedLine line) {
 		// Memory Access Instructions:
 		{
 		case LDW:
-			if (mode == DEBUG) printf("LDW\n");
+			if (mode == DEBUG) printf("\nLDW Instruction Executed\n");
 			ldwfunc(rt, rs, immediate);
 			break;
 			
 		case STW:
-			if (mode == DEBUG) printf("STW\n");
+			if (mode == DEBUG) printf("\nSTW Instruction Executed\n");
 			stwfunc(rt, rs, immediate);
 			break;
 		}
@@ -576,46 +707,41 @@ bool opcode_master(decodedLine line) {
 		// Control Flow Instructions:
 		{
 		case BZ:
-			if (mode == DEBUG) printf("BZ\n");
+			if (mode == DEBUG) printf("\nBZ Instruction Executed\n");
 			bzfunc(rs, immediate);
 			break;
 			
 		case BEQ:
-			if (mode == DEBUG) printf("BEQ\n");
+			if (mode == DEBUG) printf("\nBEQ Instruction Executed\n");
 			beqfunc(rs, rt, immediate);
 			break;
 			
 		case JR:
-			if (mode == DEBUG) printf("JR\n");
+			if (mode == DEBUG) printf("\nJR Instruction Executed\n");
 			jrfunc(rs);
 			break;
 			
 		case HALT:
-			if (mode == DEBUG) printf("HALT: FINISHING PROGRAM...\n\n\n\n\n");
+			if (mode == DEBUG) printf("HALT INSTRUCTION EXECUTED: FINISHING PROGRAM...\n\n\n\n\n");
 			haltfunc();
 			break;
 		}
 		
 	
 		default:
-			if (mode == DEBUG) printf("Error: Unknown opcode 0x%02X. Exiting.\n", opcode);
-			exit(EXIT_FAILURE);
-	}
-	
-	
-	// Displays decoded sections of the address
-	if (mode == DEBUG) {
-
-		// Differentiate between R-Type and I-Type
-		if (rtype == 1)
-			printf("R-Type:    rs: %2u   rt: %2u   rd: %2u\n", rs, rt, rd);
-		
-		else
-			printf("I-Type:    rs: %2u   rt: %2u   imm: %6d\n", rs, rt, (int16_t)immediate);
-		
-		printf("PC: %d\n", pc);
-
-		printf("\n\n\n\n");
+			if (opcode == NOP) {
+				if (mode == DEBUG) 
+					printf("\nNOP Instruction Executed\n");
+			}
+			else {
+				if (mode == DEBUG)
+					printf("Error: Unknown opcode 0x%02X. Exiting.\n", opcode);
+					
+				exit(EXIT_FAILURE);
+			}
+			
+			
+			
 	}
 	
 	
@@ -660,7 +786,7 @@ void subfunc(int dest, int src1, int src2, bool is_immediate) {
 }
 
 
-void mulfunc(int dest, int src1, int src2, bool is_immediate){
+void mulfunc(int dest, int src1, int src2, bool is_immediate) {
 	if (!is_immediate) rtype = 1;
 	int32_t val1 = registers[src1];
     int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
@@ -790,7 +916,7 @@ void jrfunc(int rs) {
 }
 
 
-void haltfunc(){
+void haltfunc() {
 	cflow_count++;
 	itype_count++;
 	total_inst_count++;
