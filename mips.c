@@ -284,8 +284,8 @@ int main(int argc, char *argv[]) {
 				if (slots[i]->pipe_stage == 4) inMEM = slots[i];
 			}
 
-			// Forwarding 
-			if (inID && inIF && findHazard(inID, inIF) && (functional_mode == FWD)) {
+			// FORWARDING 
+			if (inID && inIF && findHazard(inID, inIF) && (functional_mode == FWD)) { // Checking for "IF-ID" hazards, effectively one less than an ID-MEM hazard
 				hazard = true;
 				cycle_counter++;
 				
@@ -294,7 +294,7 @@ int main(int argc, char *argv[]) {
 
 				// Iterate through pipes and stall as appropriate
 				for (int i = 0; i < 5; i++) {
-					if (slots[i]->pipe_stage > 1 && slots[i]->pipe_stage < 4) {
+					if (slots[i]->pipe_stage > 1 && slots[i]->pipe_stage < 4) { // The secondary difference is pushing ID stages until MEM compared to EX until WB
 						if (slots[i]->pipe_stage == 3) {
 							opcode_master(*slots[i]);
 						}
@@ -335,11 +335,6 @@ int main(int argc, char *argv[]) {
 				
 				// DEBUG
 				if (mode == DEBUG) printf("\n\n\n\nStall at cycle %d: EX-ID hazard detected\n\n\n\n", cycle_counter);
-
-
-				// if (functional_mode == FORWARDING)
-					// iterate through pipes and only stall if _
-
 
 				// Iterate through pipes and stall as appropriate
 				for (int i = 0; i < 5; i++) {
