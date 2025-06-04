@@ -118,12 +118,12 @@ int main(int argc, char *argv[]) {
 	// Set mode specified in the first argument
 	if (strcmp(argv[2], "NO_PIPE") == 0)
 		functional_mode = NO_PIPE;
-	else if (strcmp(argv[1], "NO_FWD") == 0)
+	else if (strcmp(argv[2], "NO_FWD") == 0)
 		functional_mode = NO_FWD;
-	else if (strcmp(argv[1], "FWD") == 0)
+	else if (strcmp(argv[2], "FWD") == 0)
 		functional_mode = FWD;
 	else {
-		printf("\nInvalid mode. Defaulting to FWD (Forwarding Mode).\n");
+		printf("\nInvalid mode. Defaulting to Pipeline Forwarding (FWD).\n");
 		functional_mode = FWD;
 	}
 	
@@ -269,26 +269,67 @@ int main(int argc, char *argv[]) {
 				
 			}
 
-			
 
-
-			
 			// Array of decodedLines which serves as pipes
 			decodedLine *slots[5] = {&pipe.pipe1, &pipe.pipe2, &pipe.pipe3, &pipe.pipe4, &pipe.pipe5};
 
 			// 3 decodedLine variables to hold the line that is in a particular stage
-			decodedLine *inID = NULL, *inEX = NULL, *inMEM = NULL;
+			decodedLine *inIF = NULL, *inID = NULL, *inEX = NULL, *inMEM = NULL;
 
 			// Mark which line is in a particular stage
 			for (int i = 0; i < 5; i++) {
+				if (slots[i]->pipe_stage == 1) inIF = slots[i];
 				if (slots[i]->pipe_stage == 2) inID = slots[i];
 				if (slots[i]->pipe_stage == 3) inEX = slots[i];
 				if (slots[i]->pipe_stage == 4) inMEM = slots[i];
 			}
 
+			// Forwarding 
+			if (inID && inIF && findHazard(inID, inIF) && (functional_mode == FWD)) {
+				hazard = true;
+				cycle_counter++;
+				
+				// DEBUG
+				if (mode == DEBUG) printf("\n\n\n\nStall at cycle %d: IF-ID hazard detected\n\n\n\n", cycle_counter);
+
+				// Iterate through pipes and stall as appropriate
+				for (int i = 0; i < 5; i++) {
+					if (slots[i]->pipe_stage > 1 && slots[i]->pipe_stage < 4) {
+						if (slots[i]->pipe_stage == 3) {
+							opcode_master(*slots[i]);
+						}
+						slots[i]->pipe_stage++;
+					}
+					// Write-back logic once a line is pushed through its respective pipe
+					else if (slots[i]->pipe_stage == 5){
+						printf("\n\nWriting back data from pipe %d\n\n", i+1);
+						if (halt_executed && (slots[i]->instruction == HALT)){
+							end_program();
+						}
+						
+						*slots[i] = empty;
+					}
+					
+					// Load a new instruction in the pipe
+					if (!end_of_fetch && (slots[i]->pipe_stage == 0) && !newInstAdded){
+						bool already_have_fetch_inst = 0;
+						for (int j=0; j<5; j++)
+							if (slots[j]->pipe_stage == 1)
+								already_have_fetch_inst = 1;
+							
+						if (already_have_fetch_inst == 0){
+							newinst.pipe_stage = 1;
+							*slots[i] = newinst;
+							newInstAdded = true;
+							printf("New instruction added to pipeline\n\n");
+						}
+					}
+					
+				}
+			}
 
 			// ID-EX hazard handling
-			if (inID && inEX && findHazard(inEX, inID)) {
+			if (inID && inEX && findHazard(inEX, inID) && functional_mode == NO_FWD) {
 				hazard = true;
 				cycle_counter++;
 				
@@ -364,6 +405,7 @@ int main(int argc, char *argv[]) {
 
 			// Re-check which lines are in which stages
 			for (int i = 0; i < 5; i++) {
+				if (slots[i]->pipe_stage == 2) inIF = slots[i];
 				if (slots[i]->pipe_stage == 2) inID = slots[i];
 				if (slots[i]->pipe_stage == 3) inEX = slots[i];
 				if (slots[i]->pipe_stage == 4) inMEM = slots[i];
@@ -371,7 +413,7 @@ int main(int argc, char *argv[]) {
 
 
 			// memory access instructions - MEM-ID hazard handling
-			if (inID && inMEM && findHazard(inMEM, inID)) {
+			if (inID && inMEM && findHazard(inMEM, inID) && functional_mode == NO_FWD) {
 				hazard = true;
 				cycle_counter++;
 				
