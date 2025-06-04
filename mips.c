@@ -2,7 +2,39 @@
  * mips.c - Source code file for a MIPS-lite simulation
  *
  *
- * MODES:		
+ * @authors:    Evan Brown (evbr2@pdx.edu)
+ * 				Louis-David Gendron-Herndon (loge2@pdx.edu)
+ *				Ameer Melli (amelli@pdx.edu)
+ *				Anthony Le (anthle@pdx.edu)
+ *
+ *
+ *
+ *
+ *
+ * @date:       June 3, 2025
+ * @version:    3.0
+ *
+ *
+ *
+ *
+ *
+ * FUNCTIONAL MODES:		
+ *
+ *				NO_PIPE:	Works through the trace file, line by line,
+ *							with no pipeline functionality.
+ *							
+ *
+ *				NO_FWD:		Adds pipeline functionality with hazard stalling,
+ *							but no forwarding.
+ *
+ *
+ *				FWD:		Adds forwarding to the pipeline functionality.
+ *
+ *
+ *
+ *
+ * DEBUG MODES:		
+ *
  *				NORMAL:		Print instruction statistics at the end of the program.
  *							
  *
@@ -60,6 +92,7 @@ int logic_count = 0;
 int memacc_count = 0;
 int cflow_count = 0;
 int total_inst_count = 0;
+int total_stalls = 0;
 
 // Program run more
 int mode;
@@ -76,6 +109,7 @@ int cycle_counter = 0;
 
 bool rtype = 0;
 bool was_control_flow = 0;
+bool was_jrfunc_for_nopipe = 0;
 bool halt_executed = false;
 bool ready_to_end = false;
 
@@ -238,7 +272,12 @@ int main(int argc, char *argv[]) {
 				else printf("Immediate value:   %6d\n\n", (int16_t)program_store[pc].immediate);
 			}
 			
-			opcode_master(program_store[pc]);
+			if (opcode_master(program_store[pc])){
+				if(!was_jrfunc_for_nopipe)
+					pc+=2;
+				else if (was_jrfunc_for_nopipe)
+					was_jrfunc_for_nopipe = 0;
+			}
 			cycle_counter += 5; // 5 cycles per instruction
 			
 			if (program_store[pc].instruction == HALT)
@@ -274,14 +313,40 @@ int main(int argc, char *argv[]) {
 			decodedLine *slots[5] = {&pipe.pipe1, &pipe.pipe2, &pipe.pipe3, &pipe.pipe4, &pipe.pipe5};
 
 			// 3 decodedLine variables to hold the line that is in a particular stage
-			decodedLine *inIF = NULL, *inID = NULL, *inEX = NULL, *inMEM = NULL;
+			decodedLine *inIF = NULL, *inID = NULL, *inEX = NULL, *inMEM = NULL, *inWB = NULL;
+			int inIFindex = 0;
+			int inIDindex = 0;
+			int inEXindex = 0;
+			int inMEMindex = 0;
+			int inWBindex = 0;
+			
 
-			// Mark which line is in a particular stage
+			// Re-check which lines are in which stages
 			for (int i = 0; i < 5; i++) {
-				if (slots[i]->pipe_stage == 1) inIF = slots[i];
-				if (slots[i]->pipe_stage == 2) inID = slots[i];
-				if (slots[i]->pipe_stage == 3) inEX = slots[i];
-				if (slots[i]->pipe_stage == 4) inMEM = slots[i];
+				if (slots[i]->pipe_stage == 1) {
+					inIF = slots[i];
+					inIFindex = i;
+				}
+				
+				if (slots[i]->pipe_stage == 2) {
+					inID = slots[i];
+					inIDindex = i;
+				}
+				
+				if (slots[i]->pipe_stage == 3) {
+					inEX = slots[i];
+					inEXindex = i;
+				}
+				
+				if (slots[i]->pipe_stage == 4) {
+					inMEM = slots[i];
+					inMEMindex = i;
+				}
+				
+				if (slots[i]->pipe_stage == 5) {
+					inWB = slots[i];
+					inWBindex = i;
+				}
 			}
 
 			// FORWARDING 
@@ -296,14 +361,18 @@ int main(int argc, char *argv[]) {
 				for (int i = 0; i < 5; i++) {
 					if (slots[i]->pipe_stage > 1 && slots[i]->pipe_stage < 5) { // The secondary difference is pushing ID stages until MEM compared to EX until WB
 						if (slots[i]->pipe_stage == 3) {
-							opcode_master(*slots[i]);
+							if(opcode_master(*slots[i])){
+								*slots[inIFindex] = empty;
+								*slots[inIDindex] = empty;
+							}
 						}
 						slots[i]->pipe_stage++;
 					}
 					// Write-back logic once a line is pushed through its respective pipe
 					else if (slots[i]->pipe_stage == 5){
-						printf("\n\nWriting back data from pipe %d\n\n", i+1);
+						if (mode == DEBUG) printf("\n\nWriting back data from pipe %d\n\n", i+1);
 						if (halt_executed && (slots[i]->instruction == HALT)){
+							cycle_counter--;
 							end_program();
 						}
 						
@@ -312,16 +381,26 @@ int main(int argc, char *argv[]) {
 					
 					// Load a new instruction in the pipe
 					if (!end_of_fetch && (slots[i]->pipe_stage == 0) && !newInstAdded){
+						// determine if there's an empty 
 						bool already_have_fetch_inst = 0;
-						for (int j=0; j<5; j++)
+						for (int j=0; j<5; j++) {
 							if (slots[j]->pipe_stage == 1)
 								already_have_fetch_inst = 1;
+						}
 							
-						if (already_have_fetch_inst == 0){
+						if ((already_have_fetch_inst == 0) && (!was_control_flow)){
 							newinst.pipe_stage = 1;
 							*slots[i] = newinst;
 							newInstAdded = true;
-							printf("New instruction added to pipeline\n\n");
+							if (mode == DEBUG) printf("New instruction added to pipeline\n\n");
+						}
+						
+						else if ((already_have_fetch_inst == 0) && (was_control_flow)){
+							newinst = program_store[pc];
+							newinst.pipe_stage = 1;
+							*slots[i] = newinst;
+							newInstAdded = true;
+							if (mode == DEBUG) printf("New instruction added to pipeline\n\n");
 						}
 					}
 					
@@ -332,6 +411,7 @@ int main(int argc, char *argv[]) {
 			if (inID && inEX && findHazard(inEX, inID) && functional_mode == NO_FWD) {
 				hazard = true;
 				cycle_counter++;
+				total_stalls++;
 				
 				// DEBUG
 				if (mode == DEBUG) printf("\n\n\n\nStall at cycle %d: EX-ID hazard detected\n\n\n\n", cycle_counter);
@@ -340,14 +420,18 @@ int main(int argc, char *argv[]) {
 				for (int i = 0; i < 5; i++) {
 					if (slots[i]->pipe_stage > 2 && slots[i]->pipe_stage < 5) {
 						if (slots[i]->pipe_stage == 3) {
-							opcode_master(*slots[i]);
+							if(opcode_master(*slots[i])){
+								*slots[inIFindex] = empty;
+								*slots[inIDindex] = empty;
+							}
 						}
 						slots[i]->pipe_stage++;
 					}
 					// Write-back logic once a line is pushed through its respective pipe
 					else if (slots[i]->pipe_stage == 5){
-						printf("\n\nWriting back data from pipe %d\n\n", i+1);
+						if (mode == DEBUG) printf("\n\nWriting back data from pipe %d\n\n", i+1);
 						if (halt_executed && (slots[i]->instruction == HALT)){
+							cycle_counter--;
 							end_program();
 						}
 						
@@ -356,16 +440,26 @@ int main(int argc, char *argv[]) {
 					
 					// Load a new instruction in the pipe
 					if (!end_of_fetch && (slots[i]->pipe_stage == 0) && !newInstAdded){
+						// determine if there's an empty 
 						bool already_have_fetch_inst = 0;
-						for (int j=0; j<5; j++)
+						for (int j=0; j<5; j++) {
 							if (slots[j]->pipe_stage == 1)
 								already_have_fetch_inst = 1;
+						}
 							
-						if (already_have_fetch_inst == 0){
+						if ((already_have_fetch_inst == 0) && (!was_control_flow)){
 							newinst.pipe_stage = 1;
 							*slots[i] = newinst;
 							newInstAdded = true;
-							printf("New instruction added to pipeline\n\n");
+							if (mode == DEBUG) printf("New instruction added to pipeline\n\n");
+						}
+						
+						else if ((already_have_fetch_inst == 0) && (was_control_flow)){
+							newinst = program_store[pc];
+							newinst.pipe_stage = 1;
+							*slots[i] = newinst;
+							newInstAdded = true;
+							if (mode == DEBUG) printf("New instruction added to pipeline\n\n");
 						}
 					}
 					
@@ -382,7 +476,6 @@ int main(int argc, char *argv[]) {
 						printf("*********************************\n");
 				}
 
-				// opcode_master(program_store[line_number - 1]);
 
 				//DEBUG: print each binary string
 				if ((mode == DEBUG) && (rawHex_array[pc] > 0x0)) {
@@ -400,10 +493,30 @@ int main(int argc, char *argv[]) {
 
 			// Re-check which lines are in which stages
 			for (int i = 0; i < 5; i++) {
-				if (slots[i]->pipe_stage == 2) inIF = slots[i];
-				if (slots[i]->pipe_stage == 2) inID = slots[i];
-				if (slots[i]->pipe_stage == 3) inEX = slots[i];
-				if (slots[i]->pipe_stage == 4) inMEM = slots[i];
+				if (slots[i]->pipe_stage == 1) {
+					inIF = slots[i];
+					inIFindex = i;
+				}
+				
+				if (slots[i]->pipe_stage == 2) {
+					inID = slots[i];
+					inIDindex = i;
+				}
+				
+				if (slots[i]->pipe_stage == 3) {
+					inEX = slots[i];
+					inEXindex = i;
+				}
+				
+				if (slots[i]->pipe_stage == 4) {
+					inMEM = slots[i];
+					inMEMindex = i;
+				}
+				
+				if (slots[i]->pipe_stage == 5) {
+					inWB = slots[i];
+					inWBindex = i;
+				}
 			}
 
 
@@ -411,6 +524,7 @@ int main(int argc, char *argv[]) {
 			if (inID && inMEM && findHazard(inMEM, inID) && functional_mode == NO_FWD) {
 				hazard = true;
 				cycle_counter++;
+				total_stalls++;
 				
 				// DEBUG
 				if (mode == DEBUG) printf("\n\n\n\nStall at cycle %d: MEM-ID hazard detected\n\n\n\n", cycle_counter);
@@ -419,14 +533,18 @@ int main(int argc, char *argv[]) {
 				for (int i = 0; i < 5; i++) {
 					if (slots[i]->pipe_stage > 2 && slots[i]->pipe_stage < 5) {
 						if (slots[i]->pipe_stage == 3) {
-							opcode_master(*slots[i]);
+							if(opcode_master(*slots[i])){
+								*slots[inIFindex] = empty;
+								*slots[inIDindex] = empty;
+							}
 						}
 						slots[i]->pipe_stage++;
 					}
 					// Write-back logic once a line is pushed through its respective pipe
 					else if (slots[i]->pipe_stage == 5){
-						printf("\n\nWriting back data from pipe %d\n\n", i+1);
+						if (mode == DEBUG) printf("\n\nWriting back data from pipe %d\n\n", i+1);
 						if (halt_executed && (slots[i]->instruction == HALT)){
+							cycle_counter--;
 							end_program();
 						}
 						
@@ -435,16 +553,26 @@ int main(int argc, char *argv[]) {
 
 					// Load a new instruction in the pipe
 					if (!end_of_fetch && (slots[i]->pipe_stage == 0) && !newInstAdded){
+						// determine if there's an empty 
 						bool already_have_fetch_inst = 0;
-						for (int j=0; j<5; j++)
+						for (int j=0; j<5; j++) {
 							if (slots[j]->pipe_stage == 1)
 								already_have_fetch_inst = 1;
+						}
 							
-						if (already_have_fetch_inst == 0){
+						if ((already_have_fetch_inst == 0) && (!was_control_flow)){
 							newinst.pipe_stage = 1;
 							*slots[i] = newinst;
 							newInstAdded = true;
-							printf("New instruction added to pipeline");
+							if (mode == DEBUG) printf("New instruction added to pipeline\n\n");
+						}
+						
+						else if ((already_have_fetch_inst == 0) && (was_control_flow)){
+							newinst = program_store[pc];
+							newinst.pipe_stage = 1;
+							*slots[i] = newinst;
+							newInstAdded = true;
+							if (mode == DEBUG) printf("New instruction added to pipeline\n\n");
 						}
 					}
 				}
@@ -460,7 +588,6 @@ int main(int argc, char *argv[]) {
 						printf("*********************************\n");
 				}
 
-				// opcode_master(program_store[line_number - 1]);
 
 				//DEBUG: print each binary string
 				if ((mode == DEBUG) && (rawHex_array[pc] > 0x0)) {
@@ -485,14 +612,18 @@ int main(int argc, char *argv[]) {
 				for (int i = 0; i < 5; i++) {
 					if (slots[i]->pipe_stage > 0 && slots[i]->pipe_stage < 5) {
 						if (slots[i]->pipe_stage == 3) {
-							opcode_master(*slots[i]);
+							if(opcode_master(*slots[i])){
+								*slots[inIFindex] = empty;
+								*slots[inIDindex] = empty;
+							}
 						}
 						slots[i]->pipe_stage++;
 					}
 					// Print Write-backs
 					else if (slots[i]->pipe_stage == 5){
-						printf("\n\nWriting back data from pipe %d\n\n", i+1);
+						if (mode == DEBUG) printf("\n\nWriting back data from pipe %d\n\n", i+1);
 						if (halt_executed && (slots[i]->instruction == HALT)){
+							cycle_counter--;
 							end_program();
 						}
 						
@@ -508,11 +639,19 @@ int main(int argc, char *argv[]) {
 								already_have_fetch_inst = 1;
 						}
 							
-						if (already_have_fetch_inst == 0){
+						if ((already_have_fetch_inst == 0) && (!was_control_flow)){
 							newinst.pipe_stage = 1;
 							*slots[i] = newinst;
 							newInstAdded = true;
-							printf("New instruction added to pipeline\n\n");
+							if (mode == DEBUG) printf("New instruction added to pipeline\n\n");
+						}
+						
+						else if ((already_have_fetch_inst == 0) && (was_control_flow)){
+							newinst = program_store[pc];
+							newinst.pipe_stage = 1;
+							*slots[i] = newinst;
+							newInstAdded = true;
+							if (mode == DEBUG) printf("New instruction added to pipeline\n\n");
 						}
 					}
 				}	
@@ -529,7 +668,6 @@ int main(int argc, char *argv[]) {
 					printf("*********************************\n");
 				}
 
-				// opcode_master(program_store[pc]);
 
 				//DEBUG: print each binary string
 				if ((mode == DEBUG) && (rawHex_array[pc] > 0x0)) {
@@ -565,8 +703,7 @@ int main(int argc, char *argv[]) {
 
 
 	
-	if(mode == DEBUG)
-		printf("No HALT instruction found- ending program");
+	if(mode == DEBUG) printf("No HALT instruction found- ending program");
 	
 	end_program();
 
@@ -925,6 +1062,7 @@ void bzfunc(int rs, int imm) {
     total_inst_count++;
 
     if (registers[rs] == 0) {
+		pc-=2;
         pc += (int16_t)imm;
         was_control_flow = 1;
     }
@@ -937,6 +1075,7 @@ void beqfunc(int rs, int rt, int imm) {
     total_inst_count++;
 
     if (registers[rs] == registers[rt]) {
+		pc-=2;
         pc += (int16_t)imm;
         was_control_flow = 1;
     }
@@ -948,6 +1087,7 @@ void jrfunc(int rs) {
     itype_count++;
     total_inst_count++;
 	was_control_flow = 1;
+	was_jrfunc_for_nopipe = 1;
 
     pc = registers[rs];  // Assume PC holds instruction index, not byte address
 }
@@ -957,7 +1097,6 @@ void haltfunc() {
 	cflow_count++;
 	itype_count++;
 	total_inst_count++;
-	was_control_flow = 1;
 	
 	// Close the file
     fclose(file);
