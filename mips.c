@@ -294,7 +294,7 @@ int main(int argc, char *argv[]) {
 
 				// Iterate through pipes and stall as appropriate
 				for (int i = 0; i < 5; i++) {
-					if (slots[i]->pipe_stage > 1 && slots[i]->pipe_stage < 4) { // The secondary difference is pushing ID stages until MEM compared to EX until WB
+					if (slots[i]->pipe_stage > 1 && slots[i]->pipe_stage < 5) { // The secondary difference is pushing ID stages until MEM compared to EX until WB
 						if (slots[i]->pipe_stage == 3) {
 							opcode_master(*slots[i]);
 						}
