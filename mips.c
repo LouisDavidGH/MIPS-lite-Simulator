@@ -2,11 +2,10 @@
  * mips.c - Source code file for a MIPS-lite simulation
  *
  *
- * @authors:    Evan Brown (evbr2@pdx.edu)
+ * @authors:	Evan Brown (evbr2@pdx.edu)
  * 				Louis-David Gendron-Herndon (loge2@pdx.edu)
  *				Ameer Melli (amelli@pdx.edu)
  *				Anthony Le (anthle@pdx.edu)
- *
  *
  *
  *
@@ -51,11 +50,12 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <inttypes.h>
 #include "mips.h"
 
 // struct to hold decoded line information
 typedef struct decoded_line_information {
-	int instruction;
+	int32_t instruction;
 	int32_t dest_register;
 	int32_t first_reg_val;
 	int32_t second_reg_val;
@@ -74,8 +74,11 @@ typedef struct pipe_main {
 } pipeline;
 
 // Initialize memory array - Initialize Register array
-int32_t registers[NUM_REGISTERS] = {0};
+int32_t registers[NUM_REGISTERS];
+bool register_used[NUM_REGISTERS];
+
 int32_t memory[MEMORY_SIZE];
+bool memory_used[MEMORY_SIZE];
 
 // Stores all of the line's information in one array
 decodedLine program_store[MEMORY_SIZE];
@@ -119,10 +122,12 @@ bool newInstAdded = true;
 bool end_of_fetch = false;
 
 uint32_t rawHex;
-int32_t opcode;
-int rs;
-int rt;
-int rd;
+uint8_t opcode;
+uint8_t rs;
+uint8_t rt;
+uint8_t rd;
+int16_t  imm16;
+
 
 
 
@@ -171,6 +176,21 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 	
+	// Initialize all registers and memory to zero.
+	for (int i = 0; i<NUM_REGISTERS; i++){
+		register_used[i] = false;
+		registers[i] = 0;
+	}
+	
+	for (int i = 0; i<MEMORY_SIZE; i++){
+		memory_used[i] = false;
+		memory[i] = 0;
+	}
+	
+	
+	
+	
+	
 	
     // initialize pipeline slots empty
     decodedLine empty = {.instruction=NOP, .dest_register=-1, .first_reg_val=-1, .second_reg_val=-1, .immediate=0, .pipe_stage=0};
@@ -208,7 +228,7 @@ int main(int argc, char *argv[]) {
 		rawHex_array[line_number - 1] = rawHex;
 		
 		// bit shift the intruction param by twenty six
-		opcode = rawHex>>26;
+		opcode = (rawHex >> 26) & 0x3F;
 
 		// Set instruction param
 		program_store[line_number - 1].instruction = opcode;
@@ -220,30 +240,64 @@ int main(int argc, char *argv[]) {
 		rs = (rawHex >> 21) & 0x1F;
 		rt = (rawHex >> 16) & 0x1F;
 		rd = (rawHex >> 11) & 0x1F;
+		imm16 = rawHex & 0xFFFF;
+		int32_t  imm    = (int32_t) imm16;
 
-		// Loading in R-type instruction values
-		if (opcode % 2 == 0 && opcode <= 0x0A) {
-			// R-type
-			program_store[line_number - 1].dest_register = rd;
-			program_store[line_number - 1].first_reg_val = rs;
-			program_store[line_number - 1].second_reg_val = rt;
-		} 
-		
-		// Loading in I-type instruction values
-		else if (opcode <= 0x11){
-			// I-type
-			program_store[line_number - 1].dest_register = rt;
-			program_store[line_number - 1].first_reg_val = rs;
-			program_store[line_number - 1].immediate = rawHex & 0xFFFF;
-		}
-		
-		//DEBUG
-		else {
+		switch (opcode) {
+		  //-----------------------------------
+		  // R-type arithmetic/logical:
+		  case ADD: case SUB: case MUL:
+		  case OR:  case AND: case XOR:
+			program_store[line_number - 1].dest_register    = rd;
+			program_store[line_number - 1].first_reg_val     = rs;
+			program_store[line_number - 1].second_reg_val    = rt;
+			break;
+
+		  //-----------------------------------
+		  // I-type 2-reg + immediate:
+		  case ADDI: case SUBI: case MULI:
+		  case ORI:  case ANDI: case XORI:
+		  case LDW:  case STW:
+			program_store[line_number - 1].dest_register    = rt;
+			program_store[line_number - 1].first_reg_val     = rs;
+			program_store[line_number - 1].immediate         = imm;
+			break;
+
+		  //-----------------------------------
+		  // Branches with two regs + offset
+		  case BEQ:
+			program_store[line_number - 1].first_reg_val     = rs;
+			program_store[line_number - 1].second_reg_val    = rt;
+			program_store[line_number - 1].immediate         = imm;
+			break;
+
+		  // Branch-zero: 1 reg + offset
+		  case BZ:
+			program_store[line_number - 1].first_reg_val     = rs;
+			program_store[line_number - 1].immediate         = imm;
+			break;
+
+		  //-----------------------------------
+		  // Jump-register (uses only rs)
+		  case JR:
+			program_store[line_number - 1].first_reg_val     = rs;
+			break;
+
+		  //-----------------------------------
+		  // HALT, NOP, EOP have no operands
+		  case HALT:
+		  case NOP:
+		  case EOP:
+			// nothing to fill
+			break;
+
+		  //-----------------------------------
+		  default:
 			if (mode == DEBUG) {
-				printf("Line %d\n", line_number);
-				//  printf("Binary: %u\n", program_store[line_number - 1]);
-				printf("%d does not map to a valid instruction\n\n", program_store[line_number - 1].instruction);
+			  printf("Line %d: opcode 0x%X not a valid instruction\n",
+					 line_number, opcode);
 			}
+			exit(EXIT_FAILURE);
 		}
 		
 	}
@@ -764,19 +818,48 @@ void end_program() {
 
 
 void print_stats() {
-    printf("\n\n\n\nInstruction Count Statistics:\n\n"); 
+	
+	printf("\n\n\n\n Registers Used:\n"); 
 	printf("================================\n");
-    printf("  Total Instructions:	%d\n", total_inst_count);
+	bool atleast_one_register_printed = 0;
+	for (int i = 0; i<NUM_REGISTERS; i++){
+		if (register_used[i]){
+			printf(" R[%d]: ",i);
+			printf("%" PRIi32 "\n", registers[i]);
+			atleast_one_register_printed = 1;
+		}
+	}
+	if (!atleast_one_register_printed)
+			printf("No registers used.");
+	
+	printf("\n\n\n\n Memory Used:\n"); 
+	printf("================================\n");
+	bool atleast_one_memory_printed = 0;
+	for (int i = 0; i<MEMORY_SIZE; i++){
+		if (memory_used[i]){
+			printf(" Address:   %" PRIi32 "\n Contents:  %d\n", i, memory[i]);
+			printf("--------------------------------\n");
+			atleast_one_memory_printed = 1;
+		}
+	}
+	if (!atleast_one_memory_printed)
+			printf("No memory addresses used.");
+	
+    printf("\n\n\n\n Instruction Count Statistics:\n"); 
+	printf("================================\n");
+    printf(" Total Instructions:	%d\n", total_inst_count);
 	printf("--------------------------------\n");
-    printf("  R-Type:		%d\n", rtype_count);
-    printf("  I-Type:		%d\n", itype_count);
+    printf(" R-Type:		%d\n", rtype_count);
+    printf(" I-Type:		%d\n", itype_count);
 	printf("--------------------------------\n");
-    printf("  Arithmetic:		%d\n", arith_count);
-    printf("  Logical:		%d\n", logic_count);
-    printf("  Memory Access:	%d\n", memacc_count);
-    printf("  Control Flow:		%d\n", cflow_count);
+    printf(" Arithmetic:		%d\n", arith_count);
+    printf(" Logical:		%d\n", logic_count);
+    printf(" Memory Access:		%d\n", memacc_count);
+    printf(" Control Flow:		%d\n", cflow_count);
 	printf("--------------------------------\n");
-	printf("  Cycles:		%d\n", cycle_counter);
+	printf(" Cycles:		%d\n", cycle_counter);
+	printf("--------------------------------\n");
+	printf(" Program Counter:	%d\n", pc);
 	
 	return;
 }
@@ -784,48 +867,43 @@ void print_stats() {
 
 bool opcode_master(decodedLine line) {
 
-	//
-    unsigned int opcode 	= line.instruction;
-	unsigned int rd 		= line.dest_register;
-	unsigned int rs 		= line.first_reg_val;
-	unsigned int rt 		= line.second_reg_val;
-	unsigned int immediate 	= line.immediate;
 	rtype = 0;
 	was_control_flow = 0;
+	
 
 	
-    switch(opcode) {	
+    switch(line.instruction) {	
 		// Arithmetic Instructions:
 		{
 		case ADD:
 			if (mode == DEBUG) printf("\nADD Instruction Executed\n");
-			addfunc(rd, rs, rt, false);
+			addfunc(line.dest_register, line.first_reg_val, line.second_reg_val, false);
 			break;
 			
 		case ADDI:
 			if (mode == DEBUG) printf("\nADDI Instruction Executed\n");
-			addfunc(rt, rs, immediate, true);
+			addfunc(line.dest_register, line.first_reg_val, line.immediate, true);
 			break;
 			
 		case SUB:
 			if (mode == DEBUG) printf("\nSUB Instruction Executed\n");
-			subfunc(rd, rs, rt, false);
+			subfunc(line.dest_register, line.first_reg_val, line.second_reg_val, false);
 			break;
 			
 		case SUBI:
 			if (mode == DEBUG) printf("\nSUBI Instruction Executed\n");
-			subfunc(rt, rs, immediate, true);
+			subfunc(line.dest_register, line.first_reg_val, line.immediate, true);
 			break;
 			
 		case MUL:
 			if (mode == DEBUG) printf("\nMUL Instruction Executed\n");
-			mulfunc(rd, rs, rt, false);
+			mulfunc(line.dest_register, line.first_reg_val, line.second_reg_val, false);
 			
 			break;
 			
 		case MULI:
 			if (mode == DEBUG) printf("\nMULI Instruction Executed\n");
-			mulfunc(rt, rs, immediate, true);
+			mulfunc(line.dest_register, line.first_reg_val, line.immediate, true);
 			break;
 		}
 		
@@ -834,32 +912,32 @@ bool opcode_master(decodedLine line) {
 		{
 		case OR:
 			if (mode == DEBUG) printf("\nOR Instruction Executed\n");
-			orfunc(rd, rs, rt, false);
+			orfunc(line.dest_register, line.first_reg_val, line.second_reg_val, false);
 			break;
 			
 		case ORI:
 			if (mode == DEBUG) printf("\nORI Instruction Executed\n");
-			orfunc(rt, rs, immediate, true);
+			orfunc(line.dest_register, line.first_reg_val, line.immediate, true);
 			break;
 			
 		case AND:
 			if (mode == DEBUG) printf("\nAND Instruction Executed\n");
-			andfunc(rd, rs, rt, false);
+			andfunc(line.dest_register, line.first_reg_val, line.second_reg_val, false);
 			break;
 			
 		case ANDI:
 			if (mode == DEBUG) printf("\nANDI Instruction Executed\n");
-			andfunc(rt, rs, immediate, true);
+			andfunc(line.dest_register, line.first_reg_val, line.immediate, true);
 			break;
 			
 		case XOR:
 			if (mode == DEBUG) printf("\nXOR Instruction Executed\n");
-			xorfunc(rd, rs, rt, false);
+			xorfunc(line.dest_register, line.first_reg_val, line.second_reg_val, false);
 			break;
 			
 		case XORI:
 			if (mode == DEBUG) printf("\nXORI Instruction Executed\n");
-			xorfunc(rt, rs, immediate, true);
+			xorfunc(line.dest_register, line.first_reg_val, line.immediate, true);
 			break;	
 		}
 		
@@ -868,12 +946,12 @@ bool opcode_master(decodedLine line) {
 		{
 		case LDW:
 			if (mode == DEBUG) printf("\nLDW Instruction Executed\n");
-			ldwfunc(rt, rs, immediate);
+			ldwfunc(line.dest_register, line.first_reg_val, line.immediate);
 			break;
 			
 		case STW:
 			if (mode == DEBUG) printf("\nSTW Instruction Executed\n");
-			stwfunc(rt, rs, immediate);
+			stwfunc(line.dest_register, line.first_reg_val, line.immediate);
 			break;
 		}
 		
@@ -882,17 +960,17 @@ bool opcode_master(decodedLine line) {
 		{
 		case BZ:
 			if (mode == DEBUG) printf("\nBZ Instruction Executed\n");
-			bzfunc(rs, immediate);
+			bzfunc(line.first_reg_val, line.immediate);
 			break;
 			
 		case BEQ:
 			if (mode == DEBUG) printf("\nBEQ Instruction Executed\n");
-			beqfunc(rs, rt, immediate);
+			beqfunc(line.first_reg_val, line.second_reg_val, line.immediate);
 			break;
 			
 		case JR:
 			if (mode == DEBUG) printf("\nJR Instruction Executed\n");
-			jrfunc(rs);
+			jrfunc(line.first_reg_val);
 			break;
 			
 		case HALT:
@@ -909,7 +987,7 @@ bool opcode_master(decodedLine line) {
 			}
 			else {
 				if (mode == DEBUG)
-					printf("Error: Unknown opcode 0x%02X. Exiting.\n", opcode);
+					printf("Error: Unknown opcode 0x%02X. Exiting.\n", line.instruction);
 					
 				exit(EXIT_FAILURE);
 			}
@@ -928,11 +1006,25 @@ bool opcode_master(decodedLine line) {
 }
 
 
-void addfunc(int dest, int src1, int src2, bool is_immediate) {
+void addfunc(int32_t dest, int32_t src1, int32_t src2, bool is_immediate) {
+	if(mode == DEBUG) printf(
+            "[DEBUG] addfunc called with dest=%" PRIi32
+            ", src1=%" PRIi32
+            ", src2=%" PRIi32
+            ", is_immediate=%d\n",
+            dest,
+            src1,
+            src2,
+            is_immediate
+        );
+	
 	if (!is_immediate) rtype = 1;
-    int32_t val1 = registers[src1];
-    int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2]; // sign-extend imm
-    registers[dest] = val1 + val2;
+    int32_t val1 = registers[(int)src1];
+    int32_t val2 = is_immediate ? src2 : registers[(int)src2]; // sign-extend imm
+    registers[(int)dest] = val1 + val2;
+	register_used[(int)dest] = 1;
+	register_used[(int)src1] = 1;
+	if (rtype) register_used[(int)src2] = 1;
 
     arith_count++;
     if (is_immediate)
@@ -944,11 +1036,26 @@ void addfunc(int dest, int src1, int src2, bool is_immediate) {
 }
 
 
-void subfunc(int dest, int src1, int src2, bool is_immediate) {
+void subfunc(int32_t dest, int32_t src1, int32_t src2, bool is_immediate) {
+	if(mode == DEBUG) printf(
+            "[DEBUG] subfunc called with dest=%" PRIi32
+            ", src1=%" PRIi32
+            ", src2=%" PRIi32
+            ", is_immediate=%d\n",
+            dest,
+            src1,
+            src2,
+            is_immediate
+        );
+		
+		
 	if (!is_immediate) rtype = 1;
-    int32_t val1 = registers[src1];
-    int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
-    registers[dest] = val1 - val2;
+    int32_t val1 = registers[(int)src1];
+    int32_t val2 = is_immediate ? (int16_t)src2 : registers[(int)src2];
+    registers[(int)dest] = val1 - val2;
+	register_used[(int)dest] = 1;
+	register_used[(int)src1] = 1;
+	if (rtype) register_used[(int)src2] = 1;
 
     arith_count++;
     if (is_immediate)
@@ -961,10 +1068,25 @@ void subfunc(int dest, int src1, int src2, bool is_immediate) {
 
 
 void mulfunc(int dest, int src1, int src2, bool is_immediate) {
+	if(mode == DEBUG) printf(
+            "[DEBUG] mulfunc called with dest=%" PRIi32
+            ", src1=%" PRIi32
+            ", src2=%" PRIi32
+            ", is_immediate=%d\n",
+            dest,
+            src1,
+            src2,
+            is_immediate
+        );
+		
+		
 	if (!is_immediate) rtype = 1;
-	int32_t val1 = registers[src1];
-    int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
-    registers[dest] = val1 * val2;
+	int32_t val1 = registers[(int)src1];
+    int32_t val2 = is_immediate ? (int16_t)src2 : registers[(int)src2];
+    registers[(int)dest] = val1 * val2;
+	register_used[(int)dest] = 1;
+	register_used[(int)src1] = 1;
+	if (rtype) register_used[(int)src2] = 1;
 
     arith_count++;
     if (is_immediate)
@@ -977,10 +1099,25 @@ void mulfunc(int dest, int src1, int src2, bool is_immediate) {
 
 
 void orfunc(int dest, int src1, int src2, bool is_immediate) {
+	if(mode == DEBUG) printf(
+            "[DEBUG] orfunc called with dest=%" PRIi32
+            ", src1=%" PRIi32
+            ", src2=%" PRIi32
+            ", is_immediate=%d\n",
+            dest,
+            src1,
+            src2,
+            is_immediate
+        );
+		
+		
 	if (!is_immediate) rtype = 1;
-    int32_t val1 = registers[src1];
-    int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
-    registers[dest] = val1 | val2;
+    int32_t val1 = registers[(int)src1];
+    int32_t val2 = is_immediate ? (int16_t)src2 : registers[(int)src2];
+    registers[(int)dest] = val1 | val2;
+	register_used[(int)dest] = 1;
+	register_used[(int)src1] = 1;
+	if (rtype) register_used[(int)src2] = 1;
 
     logic_count++;
     if (is_immediate)
@@ -993,10 +1130,25 @@ void orfunc(int dest, int src1, int src2, bool is_immediate) {
 
 
 void andfunc(int dest, int src1, int src2, bool is_immediate) {
+	if(mode == DEBUG) printf(
+            "[DEBUG] andfunc called with dest=%" PRIi32
+            ", src1=%" PRIi32
+            ", src2=%" PRIi32
+            ", is_immediate=%d\n",
+            dest,
+            src1,
+            src2,
+            is_immediate
+        );
+		
+		
 	if (!is_immediate) rtype = 1;
     int32_t val1 = registers[src1];
-    int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
-    registers[dest] = val1 & val2;
+    int32_t val2 = is_immediate ? (int16_t)src2 : registers[(int)src2];
+    registers[(int)dest] = val1 & val2;
+	register_used[(int)dest] = 1;
+	register_used[(int)src1] = 1;
+	if (rtype) register_used[(int)src2] = 1;
 
     logic_count++;
     if (is_immediate)
@@ -1009,10 +1161,25 @@ void andfunc(int dest, int src1, int src2, bool is_immediate) {
 
 
 void xorfunc(int dest, int src1, int src2, bool is_immediate) {
+	if(mode == DEBUG) printf(
+            "[DEBUG] xorfunc called with dest=%" PRIi32
+            ", src1=%" PRIi32
+            ", src2=%" PRIi32
+            ", is_immediate=%d\n",
+            dest,
+            src1,
+            src2,
+            is_immediate
+        );
+		
+		
 	if (!is_immediate) rtype = 1;
-    int32_t val1 = registers[src1];
-    int32_t val2 = is_immediate ? (int16_t)src2 : registers[src2];
-    registers[dest] = val1 ^ val2;
+    int32_t val1 = registers[(int)src1];
+    int32_t val2 = is_immediate ? (int16_t)src2 : registers[(int)src2];
+    registers[(int)dest] = val1 ^ val2;
+	register_used[(int)dest] = 1;
+	register_used[(int)src1] = 1;
+	if (rtype) register_used[(int)src2] = 1;
 
     logic_count++;
     if (is_immediate)
@@ -1024,31 +1191,62 @@ void xorfunc(int dest, int src1, int src2, bool is_immediate) {
 }
 
 
-void ldwfunc(int rt, int rs, int imm) {
-    int32_t addr = registers[rs] + (int16_t)imm;
-
+void ldwfunc(int32_t rt, int32_t rs, int32_t imm) {
+	
+	if(mode == DEBUG) printf(
+            "[DEBUG] ldwfunc called with rt=%" PRIi32
+            ", rs=%" PRIi32
+            ", imm=%" PRIi32 "\n",
+            rt,
+            rs,
+            imm
+        );
+	
+    int32_t addr = registers[(int)rs] + (int16_t)imm;
+	/*
     if (addr % 4 != 0 || addr / 4 < 0 || addr / 4 >= MEMORY_SIZE) {
         printf("Memory load error: invalid address 0x%X\n", addr);
         exit(EXIT_FAILURE);
-    }
+    }*/
 
-    registers[rt] = memory[addr / 4];
-
+    registers[(int)rt] = memory[(int)addr];
+	
+	memory_used[(int)addr] = 1;
+	register_used[(int)rt] = 1;
+	register_used[(int)rs] = 1;
+	
     memacc_count++;
     itype_count++;
     total_inst_count++;
 }
 
 
-void stwfunc(int rt, int rs, int imm) {
-    int32_t addr = registers[rs] + (int16_t)imm;
-
+void stwfunc(int32_t rt, int32_t rs, int32_t imm) {
+	
+	
+		
+	if(mode == DEBUG) printf(
+            "[DEBUG] stwfunc called with rt=%" PRIi32
+            ", rs=%" PRIi32
+            ", imm=%" PRIi32 "\n",
+            rt,
+            rs,
+            imm
+        );
+	
+    int32_t addr = registers[(int)rs] + (int16_t)imm;
+	
+	/*
     if (addr % 4 != 0 || addr / 4 < 0 || addr / 4 >= MEMORY_SIZE) {
-        printf("Memory store error: invalid address 0x%X\n", addr);
+        if (mode == DEBUG) printf("Memory store error: invalid address 0x%X\n", addr);
         exit(EXIT_FAILURE);
-    }
-
-    memory[addr / 4] = registers[rt];
+    }*/
+	
+	memory[(int)addr] = registers[(int)rt];
+	memory_used[(int)addr] = 1;
+	
+	register_used[(int)rt] = 1;
+	register_used[(int)rs] = 1;
 
     memacc_count++;
     itype_count++;
@@ -1057,11 +1255,22 @@ void stwfunc(int rt, int rs, int imm) {
 
 
 void bzfunc(int rs, int imm) {
+	
+	if(mode == DEBUG) printf(
+            "[DEBUG] bzfunc called with rs=%d, imm=%d (signed offset=%d), "
+            "reg[%d]=%d, pc_before=%d, pc_target=%d\n",
+            rs, imm, (int16_t)imm,
+            rs, registers[rs],
+            pc, pc+(int16_t)imm
+        );
+	
+	
     cflow_count++;
     itype_count++;
     total_inst_count++;
+	register_used[(int)rs] = 1;
 
-    if (registers[rs] == 0) {
+    if (registers[(int)rs] == 0) {
 		pc-=2;
         pc += (int16_t)imm;
         was_control_flow = 1;
@@ -1070,11 +1279,25 @@ void bzfunc(int rs, int imm) {
 
 
 void beqfunc(int rs, int rt, int imm) {
+	
+	if(mode == DEBUG) printf(
+            "[DEBUG] beqfunc called with rs=%d, rt=%d, imm=%d (signed offset=%d)\n"
+            "        reg[%d]=%d, reg[%d]=%d\n"
+            "        pc_before=%d, pc_target=%d\n",
+            rs, rt, imm, (int16_t)imm,
+            rs, registers[(int)rs],
+            rt, registers[(int)rt],
+            pc, pc+(int16_t)imm
+        );
+	
+	
     cflow_count++;
     itype_count++;
     total_inst_count++;
+	register_used[(int)rs] = 1;
+	register_used[(int)rt] = 1;
 
-    if (registers[rs] == registers[rt]) {
+    if (registers[(int)rs] == registers[(int)rt]) {
 		pc-=2;
         pc += (int16_t)imm;
         was_control_flow = 1;
@@ -1089,7 +1312,8 @@ void jrfunc(int rs) {
 	was_control_flow = 1;
 	was_jrfunc_for_nopipe = 1;
 
-    pc = registers[rs];  // Assume PC holds instruction index, not byte address
+    pc = registers[(int)rs];  // Assume PC holds instruction index, not byte address
+	register_used[(int)rs] = 1;
 }
 
 
