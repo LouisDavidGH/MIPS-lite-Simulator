@@ -86,7 +86,7 @@ bool branchedFlag = false;
 bool rtype = 0;
 
 // Controls pc counter if continue incrementing or not
-int was_control_flow = 0;
+bool was_control_flow = false;
 //////////////////////////
 // MAIN
 //////////////////////////
@@ -208,6 +208,7 @@ int main(int argc, char *argv[]) {
 	if (mode == DEBUG_EXTRA) {
 		printf("\n-- Going through the instructions --\n");
 	}
+	
 	int Running = 1;
 	// THIS SECTION IS THE PROGRAM COUNTER KEEPING TRACK OF EACH INSTRUCTION UNTIL HALTED
 	while(Running) {
@@ -361,7 +362,7 @@ void print_mem() {
         // Only print memory locations that have been marked as used
         if (usedMemory[i] == 1) {
 			valid = 1;
-            printf("Address %d, Contents: %d\n", i, memory[i]);
+            printf("Address %d, Contents: %d\n", i * 4, memory[i]);
         }
     }
 
@@ -771,14 +772,11 @@ void opcode_master(decodedLine line) {
 			print_mem();
 	}
 	// Unless control flow instruction modified pc directly, increment by default
-	if (was_control_flow == 0) {
+	if (was_control_flow == true) {
 		pc++;
 	}
-	else if (was_control_flow == -1){
-		return;
-	}
 	else {
-		was_control_flow = 0;
+		was_control_flow = true;
 	}
 }
 
@@ -818,7 +816,6 @@ void addfunc(int dest, int src1, int src2, bool is_immediate) {
     // Increment total instruction count executed
     total_inst_count++;
 }
-
 
 
 void subfunc(int dest, int src1, int src2, bool is_immediate) {
@@ -964,16 +961,15 @@ void ldwfunc(int rt, int rs, int imm) {
         exit(EXIT_FAILURE);
     }
 
-    registers[rt] = addr;
+    registers[rt] = addr / 4;
 	
 	usedRegisters[rt] = 1;
-	usedMemory[addr] = 1;
+	usedMemory[addr / 4] = 1;
 
     memacc_count++;
     itype_count++;
     total_inst_count++;
 }
-
 
 void stwfunc(int rt, int rs, int imm) {
     int32_t addr = registers[rs] + (int16_t)imm;
@@ -983,10 +979,10 @@ void stwfunc(int rt, int rs, int imm) {
         exit(EXIT_FAILURE);
     }
 
-    memory[addr] = registers[rt];
+    memory[addr / 4] = registers[rt];
 	
 	usedRegisters[rt] = 1;
-	usedMemory[addr] = 1;
+	usedMemory[addr / 4] = 1;
 
     memacc_count++;
     itype_count++;
@@ -1002,7 +998,7 @@ void bzfunc(int rs, int imm) {
         pc += (int16_t)imm;
 		usedRegisters[rs] = 1;
 		branchedFlag = true;
-		was_control_flow = 1;		
+		was_control_flow = false;		
     }
 	else {
 		usedRegisters[rs] = 1;
@@ -1033,7 +1029,7 @@ void jrfunc(int rs) {
     cflow_count++;
     itype_count++;
     total_inst_count++;
-	was_control_flow = 1;
+	was_control_flow = false;
 	
 	branchedFlag = true;
     pc = registers[rs];  // Assume PC holds instruction index, not byte address

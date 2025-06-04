@@ -22,7 +22,7 @@
 // MIPS system specifications
 #define ADDRESS_BITS 32
 #define NUM_REGISTERS 32
-#define MEMORY_SIZE 4096
+#define MEMORY_SIZE 1024
 #define CLOCK_SIZE 5
 
 // Mode values

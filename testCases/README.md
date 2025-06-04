@@ -3,13 +3,13 @@ In test1.txt
 - Tests out ADD, ADDI, SUB, and SUBI
 
 In test2.txt
-- MULT and MULT
+- Tests out MULT and MULT
 
 In test3.txt
-- logical operators
+- Tests out logical operators
 
 In test4.txt
-- branches
+- Tests out branches
 
 In test5.txt
-- @todo jump register, store, load
+- Tests out jump register, store, load
