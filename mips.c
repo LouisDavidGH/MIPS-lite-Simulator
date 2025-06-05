@@ -1294,7 +1294,7 @@ void bzfunc(int32_t rs, int32_t imm) {
     total_inst_count++;
 	register_used[(int)rs] = 1;
 
-    if ((registers[(int)rs] == 0) && (successful_branch_limiter_count < successful_branch_limiter)) {
+    if ((registers[(int)rs] == 0) && (successful_branch_limiter < successful_branch_limiter_count)) {
 		pc-=2;
         pc += ((int16_t)imm/4);
         was_control_flow = 1;
@@ -1322,7 +1322,7 @@ void beqfunc(int32_t rs, int32_t rt, int32_t imm) {
 	register_used[(int)rs] = 1;
 	register_used[(int)rt] = 1;
 
-    if ((registers[(int)rs] == registers[(int)rt]) && (successful_branch_limiter_count < successful_branch_limiter)) {
+    if ((registers[(int)rs] == registers[(int)rt]) && (successful_branch_limiter < successful_branch_limiter_count)) {
 		pc-=2;
         pc += ((int16_t)imm/4);
         was_control_flow = 1;
@@ -1338,7 +1338,7 @@ void jrfunc(int32_t rs) {
 	was_control_flow = 1;
 	was_jrfunc_for_nopipe = 1;
 
-	if (successful_branch_limiter_count < successful_branch_limiter){
+	if (successful_branch_limiter < successful_branch_limiter_count){
 		pc = ((int16_t)registers[(int)rs]/4);  // Assume PC holds instruction index, not byte address
 		register_used[(int)rs] = 1;
 		successful_branch_limiter++;
