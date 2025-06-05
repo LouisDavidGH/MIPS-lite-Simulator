@@ -110,6 +110,10 @@ FILE *file;
 int pc = 0;
 int cycle_counter = 0;
 
+// Since we keep getting stuck in loops
+int successful_branch_limiter = 0;
+int successful_branch_limiter_count = 20;
+
 bool rtype = 0;
 bool was_control_flow = 0;
 bool was_jrfunc_for_nopipe = 0;
@@ -297,7 +301,7 @@ int main(int argc, char *argv[]) {
 			  printf("Line %d: opcode 0x%X not a valid instruction\n",
 					 line_number, opcode);
 			}
-			exit(EXIT_FAILURE);
+			
 		}
 		
 	}
@@ -991,15 +995,25 @@ bool opcode_master(decodedLine line) {
 		
 	
 		default:
-			if (opcode == NOP) {
+			if (line.instruction == NOP) {
 				if (mode == DEBUG) 
 					printf("\nNOP Instruction Executed\n");
+			}
+			if (line.instruction == 0x3F){
+				if (mode == DEBUG)
+					printf("Error: Unknown opcode 0x%02X. Exiting.\n", line.instruction);
+			}
+				
+			if (line.instruction == EOP){
+				if (mode == DEBUG)
+					printf("\n End Of Program found (no HALT found): ending program\n");
+				end_program();
 			}
 			else {
 				if (mode == DEBUG)
 					printf("Error: Unknown opcode 0x%02X. Exiting.\n", line.instruction);
 					
-				exit(EXIT_FAILURE);
+				
 			}
 			
 			
@@ -1280,10 +1294,11 @@ void bzfunc(int32_t rs, int32_t imm) {
     total_inst_count++;
 	register_used[(int)rs] = 1;
 
-    if (registers[(int)rs] == 0) {
+    if ((registers[(int)rs] == 0) && (successful_branch_limiter_count < successful_branch_limiter)) {
 		pc-=2;
-        pc += (int16_t)imm;
+        pc += ((int16_t)imm/4);
         was_control_flow = 1;
+		successful_branch_limiter++;
     }
 }
 
@@ -1307,10 +1322,11 @@ void beqfunc(int32_t rs, int32_t rt, int32_t imm) {
 	register_used[(int)rs] = 1;
 	register_used[(int)rt] = 1;
 
-    if (registers[(int)rs] == registers[(int)rt]) {
+    if ((registers[(int)rs] == registers[(int)rt]) && (successful_branch_limiter_count < successful_branch_limiter)) {
 		pc-=2;
-        pc += (int16_t)imm;
+        pc += ((int16_t)imm/4);
         was_control_flow = 1;
+		successful_branch_limiter++;
     }
 }
 
@@ -1322,8 +1338,11 @@ void jrfunc(int32_t rs) {
 	was_control_flow = 1;
 	was_jrfunc_for_nopipe = 1;
 
-    pc = registers[(int)rs];  // Assume PC holds instruction index, not byte address
-	register_used[(int)rs] = 1;
+	if (successful_branch_limiter_count < successful_branch_limiter){
+		pc = ((int16_t)registers[(int)rs]/4);  // Assume PC holds instruction index, not byte address
+		register_used[(int)rs] = 1;
+		successful_branch_limiter++;
+	}
 }
 
 
