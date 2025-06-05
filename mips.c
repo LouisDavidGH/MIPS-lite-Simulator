@@ -10,8 +10,8 @@
  *
  *
  *
- * @date:       June 3, 2025
- * @version:    3.0
+ * @date:       June 5, 2025
+ * @version:    4.0
  *
  *
  *
@@ -81,7 +81,7 @@ int32_t memory[MEMORY_SIZE];
 bool memory_used[MEMORY_SIZE];
 
 // Stores all of the line's information in one array
-decodedLine program_store[MEMORY_SIZE];
+decodedLine program_store[MEMORY_SIZE+1];
 uint32_t rawHex_array[MEMORY_SIZE];
 
 // Variable for our pipe struct
@@ -126,7 +126,7 @@ uint8_t opcode;
 uint8_t rs;
 uint8_t rt;
 uint8_t rd;
-int16_t  imm16;
+int16_t imm16;
 
 
 
@@ -162,8 +162,8 @@ int main(int argc, char *argv[]) {
 	else if (strcmp(argv[2], "FWD") == 0)
 		functional_mode = FWD;
 	else {
-		printf("\nInvalid mode. Defaulting to Pipeline Forwarding (FWD).\n");
-		functional_mode = FWD;
+		printf("\nInvalid mode. Defaulting to Non-Pipelined (NO_PIPE).\n");
+		functional_mode = NO_PIPE;
 	}
 	
 	
@@ -334,8 +334,9 @@ int main(int argc, char *argv[]) {
 			}
 			cycle_counter += 5; // 5 cycles per instruction
 			
-			if (program_store[pc].instruction == HALT)
+			if (!was_control_flow && program_store[pc].instruction == HALT){
 				end_program();
+			}
 		}
 	}
 	
@@ -403,6 +404,7 @@ int main(int argc, char *argv[]) {
 				}
 			}
 
+
 			// FORWARDING 
 			if (inID && inIF && findHazard(inID, inIF) && (functional_mode == FWD)) { // Checking for "IF-ID" hazards, effectively one less than an ID-MEM hazard
 				hazard = true;
@@ -460,6 +462,7 @@ int main(int argc, char *argv[]) {
 					
 				}
 			}
+
 
 			// ID-EX hazard handling
 			if (inID && inEX && findHazard(inEX, inID) && functional_mode == NO_FWD) {
@@ -819,7 +822,7 @@ void end_program() {
 
 void print_stats() {
 	
-	printf("\n\n\n\n Registers Used:\n"); 
+	printf("\n\n\n Registers Used:\n"); 
 	printf("================================\n");
 	bool atleast_one_register_printed = 0;
 	for (int i = 0; i<NUM_REGISTERS; i++){
@@ -831,21 +834,27 @@ void print_stats() {
 	}
 	if (!atleast_one_register_printed)
 			printf("No registers used.");
+	printf("================================\n");
 	
-	printf("\n\n\n\n Memory Used:\n"); 
+	
+	
+	printf("\n\n\n Memory Used:\n"); 
 	printf("================================\n");
 	bool atleast_one_memory_printed = 0;
 	for (int i = 0; i<MEMORY_SIZE; i++){
 		if (memory_used[i]){
+			if (atleast_one_memory_printed) printf("--------------------------------\n");
 			printf(" Address:   %" PRIi32 "\n Contents:  %d\n", i, memory[i]);
-			printf("--------------------------------\n");
 			atleast_one_memory_printed = 1;
 		}
 	}
 	if (!atleast_one_memory_printed)
-			printf("No memory addresses used.");
+			printf("No memory addresses used.\n");
+	printf("================================\n");
 	
-    printf("\n\n\n\n Instruction Count Statistics:\n"); 
+	
+	
+    printf("\n\n\n Instruction Count Statistics:\n"); 
 	printf("================================\n");
     printf(" Total Instructions:	%d\n", total_inst_count);
 	printf("--------------------------------\n");
@@ -860,6 +869,7 @@ void print_stats() {
 	printf(" Cycles:		%d\n", cycle_counter);
 	printf("--------------------------------\n");
 	printf(" Program Counter:	%d\n", pc);
+	printf("================================\n");
 	
 	return;
 }
@@ -1067,7 +1077,7 @@ void subfunc(int32_t dest, int32_t src1, int32_t src2, bool is_immediate) {
 }
 
 
-void mulfunc(int dest, int src1, int src2, bool is_immediate) {
+void mulfunc(int32_t dest, int32_t src1, int32_t src2, bool is_immediate) {
 	if(mode == DEBUG) printf(
             "[DEBUG] mulfunc called with dest=%" PRIi32
             ", src1=%" PRIi32
@@ -1098,7 +1108,7 @@ void mulfunc(int dest, int src1, int src2, bool is_immediate) {
 }
 
 
-void orfunc(int dest, int src1, int src2, bool is_immediate) {
+void orfunc(int32_t dest, int32_t src1, int32_t src2, bool is_immediate) {
 	if(mode == DEBUG) printf(
             "[DEBUG] orfunc called with dest=%" PRIi32
             ", src1=%" PRIi32
@@ -1129,7 +1139,7 @@ void orfunc(int dest, int src1, int src2, bool is_immediate) {
 }
 
 
-void andfunc(int dest, int src1, int src2, bool is_immediate) {
+void andfunc(int32_t dest, int32_t src1, int32_t src2, bool is_immediate) {
 	if(mode == DEBUG) printf(
             "[DEBUG] andfunc called with dest=%" PRIi32
             ", src1=%" PRIi32
@@ -1160,7 +1170,7 @@ void andfunc(int dest, int src1, int src2, bool is_immediate) {
 }
 
 
-void xorfunc(int dest, int src1, int src2, bool is_immediate) {
+void xorfunc(int32_t dest, int32_t src1, int32_t src2, bool is_immediate) {
 	if(mode == DEBUG) printf(
             "[DEBUG] xorfunc called with dest=%" PRIi32
             ", src1=%" PRIi32
@@ -1209,9 +1219,9 @@ void ldwfunc(int32_t rt, int32_t rs, int32_t imm) {
         exit(EXIT_FAILURE);
     }*/
 
-    registers[(int)rt] = memory[(int)addr];
+    registers[(int)rt] = memory[((int)addr % MEMORY_SIZE)];
 	
-	memory_used[(int)addr] = 1;
+	memory_used[((int)addr % MEMORY_SIZE)] = 1;
 	register_used[(int)rt] = 1;
 	register_used[(int)rs] = 1;
 	
@@ -1242,8 +1252,8 @@ void stwfunc(int32_t rt, int32_t rs, int32_t imm) {
         exit(EXIT_FAILURE);
     }*/
 	
-	memory[(int)addr] = registers[(int)rt];
-	memory_used[(int)addr] = 1;
+	memory[((int)addr % MEMORY_SIZE)] = registers[(int)rt];
+	memory_used[((int)addr % MEMORY_SIZE)] = 1;
 	
 	register_used[(int)rt] = 1;
 	register_used[(int)rs] = 1;
@@ -1254,7 +1264,7 @@ void stwfunc(int32_t rt, int32_t rs, int32_t imm) {
 }
 
 
-void bzfunc(int rs, int imm) {
+void bzfunc(int32_t rs, int32_t imm) {
 	
 	if(mode == DEBUG) printf(
             "[DEBUG] bzfunc called with rs=%d, imm=%d (signed offset=%d), "
@@ -1278,7 +1288,7 @@ void bzfunc(int rs, int imm) {
 }
 
 
-void beqfunc(int rs, int rt, int imm) {
+void beqfunc(int32_t rs, int32_t rt, int32_t imm) {
 	
 	if(mode == DEBUG) printf(
             "[DEBUG] beqfunc called with rs=%d, rt=%d, imm=%d (signed offset=%d)\n"
@@ -1305,7 +1315,7 @@ void beqfunc(int rs, int rt, int imm) {
 }
 
 
-void jrfunc(int rs) {
+void jrfunc(int32_t rs) {
     cflow_count++;
     itype_count++;
     total_inst_count++;
@@ -1318,6 +1328,7 @@ void jrfunc(int rs) {
 
 
 void haltfunc() {
+	
 	cflow_count++;
 	itype_count++;
 	total_inst_count++;

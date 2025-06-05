@@ -7,8 +7,8 @@
  *				Anthony Le (anthle@pdx.edu)
  *
  *
- * @date:       June 3, 2025
- * @version:    3.0
+ * @date:       June 5, 2025
+ * @version:    4.0
  *		
  *
  */
@@ -48,10 +48,7 @@
 #define WB 5
 #define NUMPIPES 5
 
-#define DEST_NEEDS_SOURCE (rd[i] == (rs[j] || rt[j]))
-#define DEST_AFTER_SOURCE (i > j)
-
-
+// Instruction opcode values
 #define ADD 0x00 
 #define ADDI 0x01 
 #define SUB 0x02
@@ -71,46 +68,69 @@
 #define JR 0x10
 #define HALT 0x11
 
-#define EOP 0xFA
-#define NOP 0xFF
+// Special opcode values
+#define EOP 0xFA 	// "End Of Program" to mark the program_store[i] 
+					// instruction AFTER the last valid instruction
+#define NOP 0xFF	// "No OPeration" used in pipelining
 
 
 
 typedef struct decoded_line_information decodedLine;
 
+// Not sure if this is needed anymore
 typedef struct pipe_main pipeline;
 
+// Switch statement to complete the appropriate
+// function based on the opcode
 bool opcode_master(decodedLine line);
 
+// true = (wr destination == rd source)
+// else false
 bool findHazard(const decodedLine *wr, const decodedLine *rd);
 
+// Prints the used registers, used memory, and instruction stats
 void print_stats();
 
-
+// Runs print_stats() and ends the program
 void end_program();
 
-void addfunc(int dest, int src1, int src2, bool is_immediate);
+// (src1 reg value) + (src2 reg value) = (dest register value)
+// src1 = rs
+// if is_immediate, src2 is immediate instead of rt
+// ^ Same goes for the rest of the arithmetic and logical functions
+void addfunc(int32_t dest, int32_t src1, int32_t src2, bool is_immediate);
 
-void subfunc(int dest, int src1, int src2, bool is_immediate);
+// (src1 reg value) - (src2 reg value) = (dest register value)
+void subfunc(int32_t dest, int32_t src1, int32_t src2, bool is_immediate);
 
-void mulfunc(int dest, int src1, int src2, bool is_immediate);
+// (src1 reg value) * (src2 reg value) = (dest register value)
+void mulfunc(int32_t dest, int32_t src1, int32_t src2, bool is_immediate);
 
-void orfunc(int dest, int src1, int src2, bool is_immediate);
+// (src1 reg value) | (src2 reg value) = (dest register value)
+void orfunc(int32_t dest, int32_t src1, int32_t src2, bool is_immediate);
 
-void andfunc(int dest, int src1, int src2, bool is_immediate);
+// (src1 reg value) & (src2 reg value) = (dest register value)
+void andfunc(int32_t dest, int32_t src1, int32_t src2, bool is_immediate);
 
-void xorfunc(int dest, int src1, int src2, bool is_immediate);
+// (src1 reg value) ^ (src2 reg value) = (dest register value)
+void xorfunc(int32_t dest, int32_t src1, int32_t src2, bool is_immediate);
 
-void ldwfunc(int rt, int rs, int imm);
+// Load the value from rt into memory[(rs+imm)%1024]
+void ldwfunc(int32_t rt, int32_t rs, int32_t imm);
 
-void stwfunc(int rt, int rs, int imm);
+// Store the value from memory[(rs+imm)%1024] into rt
+void stwfunc(int32_t rt, int32_t rs, int32_t imm);
 
-void bzfunc(int rs, int imm);
+// If the value in rs = 0, add imm to PC
+void bzfunc(int32_t rs, int32_t imm);
 
-void beqfunc(int rt, int rs, int imm);
+// If rt's value = rs's value, add imm to PC
+void beqfunc(int32_t rt, int32_t rs, int32_t imm);
 
-void jrfunc(int rs);
+// Branches the to the value in register RS
+void jrfunc(int32_t rs);
 
+// Sets a flag that allows the program to end
 void haltfunc();
 
 int32_t StringToHex(char *hex_string);
