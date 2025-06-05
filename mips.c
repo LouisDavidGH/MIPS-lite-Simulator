@@ -110,6 +110,7 @@ FILE *file;
 int pc = 0;
 int cycle_counter = 0;
 
+// Simulation control variables
 bool rtype = 0;
 bool was_control_flow = 0;
 bool was_jrfunc_for_nopipe = 0;
@@ -121,6 +122,7 @@ bool hazard = false;
 bool newInstAdded = true;
 bool end_of_fetch = false;
 
+// Simulation instruction variables
 uint32_t rawHex;
 uint8_t opcode;
 uint8_t rs;
@@ -187,11 +189,7 @@ int main(int argc, char *argv[]) {
 		memory[i] = 0;
 	}
 	
-	
-	
-	
-	
-	
+
     // initialize pipeline slots empty
     decodedLine empty = {.instruction=NOP, .dest_register=-1, .first_reg_val=-1, .second_reg_val=-1, .immediate=0, .pipe_stage=0};
     pipe.pipe1 = empty; pipe.pipe2=empty; pipe.pipe3=empty; pipe.pipe4=empty; pipe.pipe5=empty;
@@ -310,9 +308,10 @@ int main(int argc, char *argv[]) {
 	
 	
 	
-	
+	// No pipelining run mode. Executes instructions amd imcrements the cycle counter by 5
 	if (functional_mode == NO_PIPE){
 		for (pc = 0; pc <= line_number; pc++){
+
 			//DEBUG: print each binary string
 			if ((mode == DEBUG) && (rawHex_array[pc] > 0x0)) {
 				printf("\n\n-------------------------------------------------------\n");
@@ -326,12 +325,14 @@ int main(int argc, char *argv[]) {
 				else printf("Immediate value:   %6d\n\n", (int16_t)program_store[pc].immediate);
 			}
 			
+			// Jump register handling
 			if (opcode_master(program_store[pc])){
 				if(!was_jrfunc_for_nopipe)
 					pc+=2;
 				else if (was_jrfunc_for_nopipe)
 					was_jrfunc_for_nopipe = 0;
 			}
+
 			cycle_counter += 5; // 5 cycles per instruction
 			
 			if (!was_control_flow && program_store[pc].instruction == HALT){
@@ -340,6 +341,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	
+	// If pipelining of any variety is enabled, load a new instruciton in the pipe
 	else if ((functional_mode == NO_FWD) || (functional_mode == FWD)){
 		while (1) {
 			// if a new instruction is added to the pipeline 
@@ -404,6 +406,7 @@ int main(int argc, char *argv[]) {
 				}
 			}
 
+//									************ PIPELINE WITH FORWARDING HAZARD HANDLING*************
 
 			// FORWARDING 
 			if (inID && inIF && findHazard(inID, inIF) && (functional_mode == FWD)) { // Checking for "IF-ID" hazards, effectively one less than an ID-MEM hazard
@@ -463,6 +466,7 @@ int main(int argc, char *argv[]) {
 				}
 			}
 
+// 										**************** PIPELINE WITH NO FORWARDING HAZARD HANDLING************
 
 			// ID-EX hazard handling
 			if (inID && inEX && findHazard(inEX, inID) && functional_mode == NO_FWD) {
@@ -659,7 +663,7 @@ int main(int argc, char *argv[]) {
 				}
 			}
 
-
+//             ****************** PIPELINE NO HAZARD HANDLING *******************
 			
 			// No-hazard case
 			if (!hazard) {
