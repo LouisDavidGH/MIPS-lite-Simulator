@@ -112,7 +112,7 @@ int cycle_counter = 0;
 
 // Since we keep getting stuck in loops
 int successful_branch_limiter = 0;
-int successful_branch_limiter_count = 20;
+int successful_branch_limiter_count = 10;
 
 bool rtype = 0;
 bool was_control_flow = 0;
@@ -122,6 +122,7 @@ bool ready_to_end = false;
 
 // Hazard and newline loaded variables
 bool hazard = false;
+int hazard_count = 0;
 bool newInstAdded = true;
 bool end_of_fetch = false;
 
@@ -411,6 +412,7 @@ int main(int argc, char *argv[]) {
 
 			// FORWARDING 
 			if (inID && inIF && findHazard(inID, inIF) && (functional_mode == FWD)) { // Checking for "IF-ID" hazards, effectively one less than an ID-MEM hazard
+				hazard_count++;
 				hazard = true;
 				cycle_counter++;
 				
@@ -470,6 +472,7 @@ int main(int argc, char *argv[]) {
 
 			// ID-EX hazard handling
 			if (inID && inEX && findHazard(inEX, inID) && functional_mode == NO_FWD) {
+				hazard_count++;
 				hazard = true;
 				cycle_counter++;
 				total_stalls++;
@@ -583,6 +586,7 @@ int main(int argc, char *argv[]) {
 
 			// memory access instructions - MEM-ID hazard handling
 			if (inID && inMEM && findHazard(inMEM, inID) && functional_mode == NO_FWD) {
+				hazard_count++;
 				hazard = true;
 				cycle_counter++;
 				total_stalls++;
@@ -871,6 +875,8 @@ void print_stats() {
     printf(" Control Flow:		%d\n", cflow_count);
 	printf("--------------------------------\n");
 	printf(" Cycles:		%d\n", cycle_counter);
+	printf("--------------------------------\n");
+	printf(" Total Hazards:		%d\n", hazard_count);
 	printf("--------------------------------\n");
 	printf(" Program Counter:	%d\n", pc);
 	printf("================================\n");
